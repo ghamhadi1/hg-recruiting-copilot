@@ -1,0 +1,34 @@
+[Auto-transcript — Zoom — "Intro call BrightPath x Staffing" — 00:41:12]
+[Speakers: Recruiter (Maya), Client (Derek Vaughn, Founder, BrightPath Marketing — fictional)]
+
+Maya: Hey Derek, thanks for jumping on. Can you hear me okay?
+Derek: Yeah yeah, sorry, I'm in the car, so if it cuts out — anyway. Go ahead.
+Maya: No worries. So tell me about the role.
+Derek: Right so, um, we're a marketing agency, about fourteen people, we're in Austin. We run everything for our clients on GoHighLevel — HighLevel, GHL, whatever you call it. Funnels, pipelines, the whole thing.
+Maya: Got it.
+Derek: And our one automation guy just left, so honestly we're kind of drowning. I need someone who can, like, own the GHL side. Build workflows, snapshots, set up sub-accounts for new clients, fix the stuff that breaks at 2am.
+Maya: How much experience are you looking for?
+Derek: At least three years in GHL. Real three years, not "I watched YouTube." I had a guy say five years and he didn't know what a trigger link was. (laughs)
+Maya: Ha. Okay, three plus years GHL. What else?
+Derek: Zapier for sure. Or n8n, actually we're moving some stuff to n8n, so if they know n8n that's — that's a big plus. Not a must. Zapier or Make is a must, one of them.
+Maya: And API stuff? Webhooks?
+Derek: Webhooks yes. They don't need to be a developer. But like, read API docs, send a webhook, map fields. Basic JSON.
+Maya: Okay.
+Derek: Oh — and this is important — we just signed two clients in Dubai and one in Riyadh. Real estate developers. So if the person speaks Arabic that would be amazing. I'd say it's... it's a strong nice-to-have. Actually, you know what, put it as preferred. If I have two equal people, the Arabic one wins.
+Maya: Arabic preferred. Noted. Hours?
+Derek: We're Central time. I need at least four hours overlap, like 9 to 1 Central. Full time, 40 hours. Monday to Friday.
+Maya: Budget?
+Derek: Uh, I was thinking 1800 to 2400 a month? USD. Depending. If they're amazing maybe a bit more. Don't tell them that. (laughs)
+Maya: (laughs) I won't put that in writing. Start date?
+Derek: Yesterday. No, seriously, ASAP. Within two weeks ideally.
+Maya: Anything that's a dealbreaker?
+Derek: English has to be good. They'll be on calls with clients sometimes. Not every day, but sometimes. And they have to document stuff. Our last guy documented nothing. Nothing!
+Maya: Documentation, English for client calls. Got it. Anything about reporting tools?
+Derek: Oh, Looker Studio would be nice, for client dashboards. Not required. Wait — also they need their own laptop and a backup internet. Power cuts, you know.
+Maya: Makes sense. Title — what do you want to call it?
+Derek: GHL Automation Specialist? Or "Marketing Automation Specialist". Whatever sounds better.
+Maya: I'll go with GHL Automation Specialist.
+Derek: Cool. Oh and one more thing, sorry, the reporting — they report to Jen, our ops manager. Not to me. Please not to me. (laughs)
+Maya: Perfect. I'll write it up and send it over for your approval.
+Derek: Sounds good. Thanks Maya.
+[Recording ended]

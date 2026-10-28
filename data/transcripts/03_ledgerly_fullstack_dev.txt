@@ -1,0 +1,28 @@
+TRANSCRIPT - Google Meet - Ledgerly (fictional SaaS) - Hiring call
+Participants: Nadia (recruiter), Ryan Cho (CTO, Ledgerly)
+
+Nadia: Okay I think we're recording. Ryan, give me the quick version.
+Ryan: Sure. Ledgerly is accounting software for small landlords. Series A, twenty-two people, eight engineers. We need another full-stack engineer.
+Nadia: Stack?
+Ryan: React with TypeScript on the front, Node on the back — Express, moving some services to NestJS. Postgres. We host on AWS. Some Lambdas.
+Nadia: Seniority?
+Ryan: Mid to senior. I'd say four plus years of professional React and Node. Not bootcamp-four-years. Production. They should have owned features end to end.
+Nadia: Must-haves?
+Ryan: TypeScript, React, Node, Postgres. SQL — real SQL, not just an ORM. Git, PRs, code review. Writing tests. Jest or Vitest, whatever.
+Nadia: Nice-to-haves?
+Ryan: AWS for sure, nice to have. Next.js. Anything fintech or accounting — that's a huge plus because the domain is weird. Double-entry, reconciliation. Hmm, Stripe integrations too.
+Nadia: Languages, spoken?
+Ryan: English, strong written English. We're async-first, everything's written in Linear and Notion. No other language needed.
+Nadia: Hours?
+Ryan: We're Eastern. They need to overlap until noon Eastern minimum. Standup is 10am Eastern.
+Nadia: Budget?
+Ryan: 4,000 to 5,500 USD a month for this, full-time contractor.
+Nadia: What makes someone fail on your team?
+Ryan: People who wait to be told what to do. And people who don't write. If you can't write a design doc, it's going to be painful.
+Nadia: Anything you DON'T want?
+Ryan: Um. Honestly, if someone's only done Angular or only Vue, it's a stretch. I'd rather React. And no pure backend people, they need to like UI.
+Nadia: Interview process?
+Ryan: Take-home, small one, then a pairing session with me. Two rounds.
+Nadia: Good. I'll send you the JD.
+Ryan: Perfect. Oh — title. "Senior Full-Stack Engineer (React/Node)". Or just Full-Stack Engineer if they're mid. Use Full-Stack Engineer.
+[end]

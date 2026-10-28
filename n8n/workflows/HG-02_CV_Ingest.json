@@ -1,0 +1,1008 @@
+{
+  "name": "HG- 02 CV Ingest",
+  "nodes": [
+    {
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "__WH__-cv",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "webhookId": "b0cbb0ef-2d33-5687-892a-732064360ca0",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_WEBHOOK__",
+          "name": "HG- Webhook Secret"
+        }
+      },
+      "id": "86032af9-65b5-5a0d-be2e-1d1665b5af55",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Load Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_settings?select=key,value",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "d2a2a1b2-be22-5b6d-a150-dc4fbb5be1eb",
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the hg_settings rows (key/value) into one config object for this run.\nconst cfg = {};\nfor (const item of $input.all()) {\n  if (item.json && item.json.key) cfg[item.json.key] = item.json.value;\n}\nif (!cfg.openai_model) throw new Error('hg_settings is empty: run supabase/schema.sql and scripts/setup.py supabase');\ncfg.today = new Date().toISOString().slice(0, 10);\nreturn [{ json: cfg }];\n"
+      },
+      "id": "5fcc0543-4f43-5c21-8a47-fec56c9dfa7e",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "name": "Prepare File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Receives {file_name, mime_type, data_base64} and turns it into an n8n binary file.\nconst body = $('Webhook').first().json.body || {};\nconst fileName = String(body.file_name || 'unnamed').replace(/[\\\\/]/g, '_').slice(0, 200);\nconst b64 = String(body.data_base64 || '').replace(/^data:[^,]*,/, '').replace(/\\s/g, '');\nconst ext = fileName.indexOf('.') === -1 ? '' : fileName.split('.').pop().toLowerCase();\nconst mimeMap = {\n  pdf: 'application/pdf',\n  docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'\n};\nconst mime = body.mime_type || mimeMap[ext] || 'application/octet-stream';\nconst size = Math.floor(b64.length * 3 / 4);\n\nconst json = { file_name: fileName, ext: b64 ? ext : 'missing', mime: mime, size: size, source: body.source || 'upload' };\nif (size > 15 * 1024 * 1024) json.ext = 'too_big';\nif (json.ext === 'pdf') json.b64 = b64; // kept for the OCR fallback\nconst binary = b64 ? { data: { data: b64, mimeType: mime, fileName: fileName, fileExtension: ext } } : {};\nreturn [{ json: json, binary: binary }];\n"
+      },
+      "id": "2a925b97-7432-5f9a-b345-54e40da3cf20",
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "name": "Is PDF?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "28bd584c-9820-4ca1-a8f2-00fb7c0e0641",
+              "leftValue": "={{ $json.ext }}",
+              "rightValue": "pdf",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "853147cc-679d-5025-b879-c8268631bafd",
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "name": "Extract PDF Text",
+      "type": "n8n-nodes-base.extractFromFile",
+      "typeVersion": 1,
+      "parameters": {
+        "operation": "pdf",
+        "binaryPropertyName": "data",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "id": "322ef91e-9153-5849-8751-0de5afd36ab6",
+      "position": [
+        1300,
+        -200
+      ]
+    },
+    {
+      "name": "PDF Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Output of \"Extract from File (PDF)\". A broken PDF arrives here as an error item (node continues on error).\nconst j = $input.first().json || {};\nconst err = j.error ? (j.error.message || String(j.error)) : '';\nreturn [{ json: { text: j.text || '', method: 'text', reason: err ? 'PDF could not be opened: ' + err.slice(0, 150) : '' } }];\n"
+      },
+      "id": "1d1923a3-789e-50a2-a79b-9c7308179820",
+      "position": [
+        1560,
+        -200
+      ]
+    },
+    {
+      "name": "Is DOCX?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "d33931b5-a41c-411d-9b81-ee5d5bfb4ac2",
+              "leftValue": "={{ $json.ext }}",
+              "rightValue": "docx",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "afd9adeb-b730-5981-9239-f613ce5f66a8",
+      "position": [
+        1300,
+        200
+      ]
+    },
+    {
+      "name": "Unzip DOCX",
+      "type": "n8n-nodes-base.compression",
+      "typeVersion": 1.1,
+      "parameters": {
+        "operation": "decompress",
+        "binaryPropertyName": "data",
+        "outputPrefix": "file_"
+      },
+      "onError": "continueRegularOutput",
+      "alwaysOutputData": true,
+      "id": "9eeb75b3-2f49-5994-b04e-f04a37d234d8",
+      "position": [
+        1560,
+        100.0
+      ]
+    },
+    {
+      "name": "DOCX Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// A .docx is a zip. \"Unzip DOCX\" gave us its files; read word/document.xml and strip the XML.\nconst item = $input.first();\nconst bin = item.binary || {};\nlet key = null;\nfor (const k of Object.keys(bin)) {\n  const name = String(bin[k].fileName || '').toLowerCase();\n  const dir = String(bin[k].directory || '').toLowerCase();\n  if (/(^|\\/)document\\.xml$/.test(name) && name.indexOf('glossary') === -1 && dir.indexOf('glossary') === -1) {\n    key = k;\n    if ((dir + '/' + name).indexOf('word') !== -1) break;\n  }\n}\nif (!key) {\n  const err = item.json && item.json.error ? ' (' + (item.json.error.message || item.json.error) + ')' : '';\n  return [{ json: { text: '', method: 'text', reason: 'Not a valid Word file: word/document.xml missing' + err } }];\n}\nconst buf = await this.helpers.getBinaryDataBuffer(0, key);\nlet xml = buf.toString('utf8');\nxml = xml.replace(/<w:tab\\/>/g, '\\t').replace(/<w:br[^>]*\\/>/g, '\\n').replace(/<\\/w:p>/g, '\\n').replace(/<\\/w:tc>/g, '\\t');\nconst text = xml.replace(/<[^>]+>/g, '')\n  .replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '\"').replace(/&apos;/g, \"'\");\nreturn [{ json: { text: text, method: 'text', reason: '' } }];\n"
+      },
+      "id": "6f7075be-b36f-5652-b3f4-82528339a94e",
+      "position": [
+        1820,
+        100.0
+      ]
+    },
+    {
+      "name": "Unsupported File",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Anything that is not PDF/DOCX ends up here and is flagged (never silently skipped).\nconst f = $('Prepare File').first().json;\nconst why = {\n  missing: 'The upload contained no file data',\n  too_big: 'File is larger than 15 MB'\n}[f.ext] || ('Unsupported file type \".' + (f.ext || '?') + '\" (send PDF or DOCX)');\nreturn [{ json: { text: '', method: 'none', reason: why } }];\n"
+      },
+      "id": "12a9859e-a66e-5396-9bb4-e19e3123555b",
+      "position": [
+        1560,
+        300.0
+      ]
+    },
+    {
+      "name": "Check Text",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Decides: is there enough text? If not and it is a PDF, try OCR (scanned CV).\nconst f = Object.assign({}, $('Prepare File').first().json);\ndelete f.b64;\nconst j = $input.first().json;\nconst text = String(j.text || '').replace(/\\u0000/g, '').replace(/[ \\t]+/g, ' ').replace(/\\n\\s*\\n+/g, '\\n').trim();\nconst letters = (text.match(/[A-Za-z؀-ۿ]/g) || []).length;\nconst readable = letters >= 150;\nreturn [{\n  json: Object.assign(f, {\n    text: text,\n    method: j.method || 'text',\n    letters: letters,\n    readable: readable,\n    needs_ocr: !readable && f.ext === 'pdf',\n    reason: readable ? '' : (j.reason || 'No readable text found in the file')\n  })\n}];\n"
+      },
+      "id": "239f7e82-e912-519b-a594-c4e4cb1d6d6d",
+      "position": [
+        2080,
+        0
+      ]
+    },
+    {
+      "name": "Needs OCR?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "2949494a-fc92-419d-9072-a72427164dc9",
+              "leftValue": "={{ $json.needs_ocr }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "39458e2d-3915-510e-96d1-1393b26f25b1",
+      "position": [
+        2340,
+        0
+      ]
+    },
+    {
+      "name": "OCR Request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Scanned / image-only PDF: send the PDF to the OpenAI vision model and ask for a transcription.\nconst j = $input.first().json;\nconst cfg = $('Config').first().json;\nconst b64 = $('Prepare File').first().json.b64;\nreturn [{\n  json: Object.assign({}, j, {\n    openai_body: {\n      model: cfg.openai_model,\n      temperature: 0,\n      messages: [{\n        role: 'user',\n        content: [\n          { type: 'file', file: { filename: j.file_name, file_data: 'data:application/pdf;base64,' + b64 } },\n          { type: 'text', text: 'This is a CV (resume), probably a scanned image. Transcribe ALL of its text exactly as written, ' +\n            'line by line, as plain text. Do not summarise, translate or add anything. ' +\n            'If the pages contain no readable CV text, reply with exactly: UNREADABLE' }\n        ]\n      }]\n    }\n  })\n}];\n"
+      },
+      "id": "624f7d23-95e9-51b5-acac-8bfb8e979d56",
+      "position": [
+        2600,
+        -200
+      ]
+    },
+    {
+      "name": "OpenAI: Read Scan",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openai_body) }}",
+        "options": {
+          "timeout": 180000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "__CRED_OPENAI__",
+          "name": "HG- OpenAI"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "5d59ece4-ca24-5982-8b82-bed349996682",
+      "position": [
+        2860,
+        -200
+      ]
+    },
+    {
+      "name": "OCR Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Result of the OCR attempt. Still no text → it will be flagged as unreadable.\nconst prev = Object.assign({}, $('Check Text').first().json);\nconst r = $input.first().json || {};\nlet text = '';\nlet reason = '';\nif (r.error) {\n  reason = 'OCR failed: ' + String(r.error.message || JSON.stringify(r.error)).slice(0, 200);\n} else {\n  text = String((((r.choices || [])[0] || {}).message || {}).content || '').trim();\n}\nif (/^\\W*UNREADABLE\\W*$/i.test(text)) {\n  reason = 'Scanned file has no readable CV text (OCR found nothing)';\n  text = '';\n}\nconst letters = (text.match(/[A-Za-z؀-ۿ]/g) || []).length;\nif (!reason && letters < 150) reason = 'Too little text even after OCR (' + letters + ' letters)';\nreturn [{\n  json: Object.assign(prev, {\n    text: letters >= 150 ? text : '',\n    method: 'ocr',\n    letters: letters,\n    readable: letters >= 150 && !reason,\n    reason: reason\n  })\n}];\n"
+      },
+      "id": "f244f5bf-04b8-520b-bbfd-84f550a03c6d",
+      "position": [
+        3120,
+        -200
+      ]
+    },
+    {
+      "name": "Readable?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "39e62eea-f2d3-4a2a-bc03-fa06b03734c6",
+              "leftValue": "={{ $json.readable }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "67210d72-052f-5ba2-ab63-e0e6aa4f0111",
+      "position": [
+        3380,
+        0
+      ]
+    },
+    {
+      "name": "Profile Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Asks OpenAI to pull a structured profile out of the CV text (skills with years, languages, CV date).\nconst j = $input.first().json;\nconst cfg = $('Config').first().json;\nconst nstr = { type: ['string', 'null'] };\nconst schema = {\n  type: 'object', additionalProperties: false,\n  required: ['full_name', 'email', 'phone', 'location', 'timezone', 'headline', 'total_years', 'languages', 'skills', 'cv_date', 'summary'],\n  properties: {\n    full_name: { type: 'string' },\n    email: nstr, phone: nstr, location: nstr,\n    timezone: Object.assign({ description: 'IANA timezone guessed from location, e.g. Asia/Beirut' }, nstr),\n    headline: { type: 'string' },\n    total_years: { type: ['number', 'null'] },\n    languages: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['language', 'level'],\n      properties: { language: { type: 'string' }, level: { type: 'string' } } } },\n    skills: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['name', 'years'],\n      properties: { name: { type: 'string' }, years: { type: ['number', 'null'] } } } },\n    cv_date: Object.assign({ description: 'YYYY-MM' }, nstr),\n    summary: { type: 'string' }\n  }\n};\nconst system = [\n  'You extract facts from a CV. Use ONLY what is written. Today is ' + cfg.today + '.',\n  'Skills: list every tool/skill. Use canonical names: \"GoHighLevel\" (for GHL, HighLevel, Go High Level), \"QuickBooks Online\" (QBO),',\n  '\"QuickBooks Desktop\", \"n8n\", \"Zapier\", \"Make\" (Make.com/Integromat), \"React\", \"Node.js\", \"TypeScript\", \"AWS\", \"Xero\", \"Gusto\",',\n  '\"Salesforce\", \"HubSpot\", \"Cold calling\", \"Appointment setting\", \"Transaction coordination\", \"Calendar management\".',\n  'Skill years: if the CV states a number for that skill (e.g. \"5 years of GoHighLevel\", \"2.5 years\"), use that number.',\n  'Otherwise add up the durations of the jobs where the skill was clearly used (\"Present\" = today). Round to 1 decimal. null if unknown.',\n  'Languages: one entry per language with the level as written (native, fluent, C1, intermediate, basic...).',\n  'cv_date: an explicit \"last updated\" / \"updated\" date if the CV has one; otherwise the most recent month/year that appears',\n  'as a job start or end date (ignore the word \"Present\"). Format YYYY-MM. null if no dates.',\n  'email: lowercase. total_years: total professional experience.'\n].join('\\n');\nreturn [{\n  json: Object.assign({}, j, {\n    openai_body: {\n      model: cfg.openai_model,\n      temperature: 0,\n      response_format: { type: 'json_schema', json_schema: { name: 'cv_profile', strict: true, schema: schema } },\n      messages: [{ role: 'system', content: system }, { role: 'user', content: 'CV TEXT:\\n\"\"\"\\n' + j.text.slice(0, 20000) + '\\n\"\"\"' }]\n    }\n  })\n}];\n"
+      },
+      "id": "cdbce80e-5d7b-5c5f-8e5d-bfc70b86e32d",
+      "position": [
+        3640,
+        -200
+      ]
+    },
+    {
+      "name": "OpenAI: Extract Profile",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openai_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "__CRED_OPENAI__",
+          "name": "HG- OpenAI"
+        }
+      },
+      "id": "d6c49bed-d79c-54b4-8979-ae0245ca1779",
+      "position": [
+        3900,
+        -200
+      ]
+    },
+    {
+      "name": "Profile & Chunks",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Profile → searchable chunks. Chunk 0 is a compact profile card, then the raw CV text in overlapping pieces.\nconst prev = Object.assign({}, $('Profile Prompt').first().json);\ndelete prev.openai_body;\nconst cfg = $('Config').first().json;\nlet p;\ntry {\n  p = JSON.parse($input.first().json.choices[0].message.content);\n} catch (e) {\n  throw new Error('Profile extraction failed for ' + prev.file_name + ': ' + JSON.stringify($input.first().json).slice(0, 300));\n}\nconst langs = (p.languages || []).map(l => l.language + ' (' + l.level + ')').join(', ');\nconst skills = (p.skills || []).map(s => s.name + (s.years != null ? ' ' + s.years + ' yrs' : '')).join(', ');\nconst chunks = [\n  p.full_name + ' | ' + p.headline + ' | Location: ' + (p.location || '?') + ' | Languages: ' + langs +\n  ' | Skills: ' + skills + ' | ' + p.summary\n];\nconst text = prev.text;\nconst size = 1200;\nconst overlap = 200;\nfor (let i = 0; i < text.length && chunks.length < 9; i += size - overlap) chunks.push(text.slice(i, i + size));\nreturn [{ json: Object.assign(prev, { profile: p, chunks: chunks, embed_body: { model: cfg.embedding_model, input: chunks } }) }];\n"
+      },
+      "id": "a5a385f6-2f9e-5f20-ab03-e0dc2f5e8d67",
+      "position": [
+        4160,
+        -200
+      ]
+    },
+    {
+      "name": "OpenAI: Embeddings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.embed_body) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "__CRED_OPENAI__",
+          "name": "HG- OpenAI"
+        }
+      },
+      "id": "29ca3022-79a3-5905-a0aa-958629e8a0fd",
+      "position": [
+        4420,
+        -200
+      ]
+    },
+    {
+      "name": "Ingest Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Joins chunks with their embeddings into one payload for hg_ingest_cv (dedup + replace logic lives in SQL).\nconst prev = $('Profile & Chunks').first().json;\nconst emb = $input.first().json;\nconst vectors = (emb.data || []).slice().sort((a, b) => a.index - b.index).map(d => d.embedding);\nif (vectors.length !== prev.chunks.length) {\n  throw new Error('Embedding count mismatch for ' + prev.file_name + ': ' + JSON.stringify(emb).slice(0, 200));\n}\nreturn [{\n  json: {\n    p: {\n      file_name: prev.file_name,\n      file_type: prev.ext,\n      raw_text: prev.text,\n      extraction_method: prev.method,\n      profile: prev.profile,\n      chunks: prev.chunks.map((c, i) => ({ content: c, embedding: vectors[i] }))\n    }\n  }\n}];\n"
+      },
+      "id": "dc1da070-f802-513a-942d-af6c42d77dbf",
+      "position": [
+        4680,
+        -200
+      ]
+    },
+    {
+      "name": "Ingest CV",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_ingest_cv",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "5428a1f9-8486-5e97-abdc-d58de496b42e",
+      "position": [
+        4940,
+        -200
+      ]
+    },
+    {
+      "name": "CV Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Tell the channel when an updated CV replaced an old one (duplicates are only logged).\nconst r = $input.first().json;\nconst cfg = $('Config').first().json;\nconst file = $('Profile & Chunks').first().json.file_name;\nlet text = '';\nif (r.action === 'replaced') {\n  text = '🔁 *Updated CV:* ' + r.name + ' sent a newer CV. `' + r.old_file + '` was replaced by `' + file +\n    '`. Search now uses the new CV only.';\n}\nreturn [{ json: { notify: !!text, body: { channel: cfg.slack_channel_id, text: text } } }];\n"
+      },
+      "id": "8705b2a4-dee4-5d94-aff6-d3e4477d0707",
+      "position": [
+        5200,
+        -200
+      ]
+    },
+    {
+      "name": "Notify?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "870c9ded-6550-42f2-88d9-2f6ea643bea6",
+              "leftValue": "={{ $json.notify }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "866b2d9f-703a-5d69-b05b-b2ff6da7b197",
+      "position": [
+        5460,
+        -200
+      ]
+    },
+    {
+      "name": "Post Notice",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "5a0abb8a-6484-5877-8647-f302a47674a0",
+      "position": [
+        5720,
+        -400
+      ]
+    },
+    {
+      "name": "Respond Saved",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify(Object.assign({ ok: true, file_name: $('Profile & Chunks').first().json.file_name, extraction_method: $('Profile & Chunks').first().json.method }, $('Ingest CV').first().json)) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "b034fc4f-abc8-52c7-b9dd-32d070df5671",
+      "position": [
+        5980,
+        -200
+      ]
+    },
+    {
+      "name": "Unreadable Payload",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Builds the \"flag as unreadable\" DB payload and the Slack alert.\nconst j = $input.first().json;\nconst cfg = $('Config').first().json;\nconst link = cfg.portal_url ? '\\n<' + cfg.portal_url + '/cvs.html|Open CV health page>' : '';\nreturn [{\n  json: {\n    p: {\n      file_name: j.file_name,\n      file_type: j.ext,\n      raw_text: String(j.text || '').slice(0, 2000),\n      extraction_method: j.method,\n      unreadable: true,\n      unreadable_reason: j.reason || 'No readable text found'\n    },\n    slack: {\n      channel: cfg.slack_channel_id,\n      text: '⚠️ *Unreadable CV flagged:* `' + j.file_name + '`\\nReason: ' + (j.reason || 'No readable text found') +\n        '\\nThis CV is NOT searchable. Please ask the candidate for a text PDF or Word file.' + link\n    }\n  }\n}];\n"
+      },
+      "id": "28599bf7-b3b3-59f5-8542-ef5d4b8bc44b",
+      "position": [
+        3640,
+        200
+      ]
+    },
+    {
+      "name": "Flag Unreadable",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_ingest_cv",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p: $json.p }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "d11524d4-7f99-5699-bf83-89191fa5b9b4",
+      "position": [
+        3900,
+        200
+      ]
+    },
+    {
+      "name": "Alert Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Unreadable Payload').first().json.slack) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "5c807a3f-84e6-54ab-a9a3-12637898c8b3",
+      "position": [
+        4160,
+        200
+      ]
+    },
+    {
+      "name": "Respond Flagged",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: false, action: 'unreadable', file_name: $('Unreadable Payload').first().json.p.file_name, reason: $('Unreadable Payload').first().json.p.unreadable_reason }) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "228e1648-ba4b-5a46-815e-c177135d6e92",
+      "position": [
+        4420,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Settings": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Prepare File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare File": {
+      "main": [
+        [
+          {
+            "node": "Is PDF?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is PDF?": {
+      "main": [
+        [
+          {
+            "node": "Extract PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Is DOCX?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extract PDF Text": {
+      "main": [
+        [
+          {
+            "node": "PDF Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "PDF Text": {
+      "main": [
+        [
+          {
+            "node": "Check Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is DOCX?": {
+      "main": [
+        [
+          {
+            "node": "Unzip DOCX",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unsupported File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unzip DOCX": {
+      "main": [
+        [
+          {
+            "node": "DOCX Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DOCX Text": {
+      "main": [
+        [
+          {
+            "node": "Check Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unsupported File": {
+      "main": [
+        [
+          {
+            "node": "Check Text",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check Text": {
+      "main": [
+        [
+          {
+            "node": "Needs OCR?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Needs OCR?": {
+      "main": [
+        [
+          {
+            "node": "OCR Request",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Readable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR Request": {
+      "main": [
+        [
+          {
+            "node": "OpenAI: Read Scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI: Read Scan": {
+      "main": [
+        [
+          {
+            "node": "OCR Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OCR Result": {
+      "main": [
+        [
+          {
+            "node": "Readable?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Readable?": {
+      "main": [
+        [
+          {
+            "node": "Profile Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Unreadable Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI: Extract Profile",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI: Extract Profile": {
+      "main": [
+        [
+          {
+            "node": "Profile & Chunks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Profile & Chunks": {
+      "main": [
+        [
+          {
+            "node": "OpenAI: Embeddings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI: Embeddings": {
+      "main": [
+        [
+          {
+            "node": "Ingest Payload",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ingest Payload": {
+      "main": [
+        [
+          {
+            "node": "Ingest CV",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ingest CV": {
+      "main": [
+        [
+          {
+            "node": "CV Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "CV Notice": {
+      "main": [
+        [
+          {
+            "node": "Notify?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Notify?": {
+      "main": [
+        [
+          {
+            "node": "Post Notice",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Respond Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post Notice": {
+      "main": [
+        [
+          {
+            "node": "Respond Saved",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Unreadable Payload": {
+      "main": [
+        [
+          {
+            "node": "Flag Unreadable",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Flag Unreadable": {
+      "main": [
+        [
+          {
+            "node": "Alert Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Alert Slack": {
+      "main": [
+        [
+          {
+            "node": "Respond Flagged",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

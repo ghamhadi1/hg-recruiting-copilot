@@ -1,0 +1,40 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pipeline · HG Recruiting Copilot</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top" id="top"></header>
+<main>
+  <div class="head">
+    <div><h1>Candidate pipeline</h1><div class="muted" id="src">Candidates per stage</div></div>
+    <button class="btn" id="refresh">↻ Refresh</button>
+  </div>
+  <div id="board"><div class="empty"><span class="spinner"></span> Loading…</div></div>
+  <p class="small muted">Stages: Approved → Outreach Sent → Replied → Screening Call → Submitted to Client → Placed / Not a Fit.
+    The copilot moves cards up to <b>Replied</b> automatically; recruiters move them further in GoHighLevel.</p>
+</main>
+<script src="/app.js"></script>
+<script>
+HG.nav('pipeline');
+const board = document.getElementById('board');
+async function load() {
+  board.innerHTML = '<div class="empty"><span class="spinner"></span> Loading…</div>';
+  try {
+    const d = await HG.api('pipeline');
+    document.getElementById('src').textContent = d.pipeline + ' · source: ' + d.source;
+    board.innerHTML = (d.warning ? '<div class="notice warn">' + HG.esc(d.warning) + '</div>' : '') +
+      '<div class="kanban">' + d.stages.map(s => `<div class="col"><h3><span>${HG.esc(s.name)}</span><span class="badge">${s.cards.length}</span></h3>
+        ${s.cards.map(c => `<div class="card"><b>${HG.esc(c.name)}</b>${c.contact ? '<div class="small muted">' + HG.esc(c.contact) + '</div>' : ''}
+        ${c.updated ? '<div class="small muted">' + HG.date(c.updated) + '</div>' : ''}</div>`).join('') || '<div class="small muted" style="padding:4px">Empty</div>'}
+        </div>`).join('') + '</div>';
+  } catch (e) { HG.fail(board, e); }
+}
+document.getElementById('refresh').onclick = load;
+load();
+</script>
+</body>
+</html>

@@ -1,0 +1,22 @@
+# secrets: never commit
+.env
+.env.*
+!.env.example
+*Password*.txt
+
+# local leftovers: screenshots, stray empty repo
+/*.png
+/*.PNG
+/hg-recruiting-copilot/
+
+# generated with real URLs/IDs filled in
+n8n/ready/
+slack/manifest.ready.yml
+
+# tooling
+__pycache__/
+*.pyc
+node_modules/
+.vercel/
+.DS_Store
+Thumbs.db

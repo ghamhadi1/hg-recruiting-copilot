@@ -1,0 +1,340 @@
+{
+  "name": "HG- 04 Slack Commands",
+  "nodes": [
+    {
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "__WH__-slack-command",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "43738dce-ad44-5e7a-b2c7-af4e209899e1",
+      "id": "80b05332-f4bd-5bb9-8393-82bd453d7773",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Load Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_settings?select=key,value",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "f0c3a18f-a00f-5236-a706-89a756e165c5",
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the hg_settings rows (key/value) into one config object for this run.\nconst cfg = {};\nfor (const item of $input.all()) {\n  if (item.json && item.json.key) cfg[item.json.key] = item.json.value;\n}\nif (!cfg.openai_model) throw new Error('hg_settings is empty: run supabase/schema.sql and scripts/setup.py supabase');\ncfg.today = new Date().toISOString().slice(0, 10);\nreturn [{ json: cfg }];\n"
+      },
+      "id": "f36c6a46-c98f-5c26-90f5-7f6a43a91e41",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "name": "Verify Command",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// /find and /jd slash commands. Verifies the request really comes from our Slack app.\nconst cfg = $('Config').first().json;\nconst b = $('Webhook').first().json.body || {};\nif (!cfg.slack_verification_token || b.token !== cfg.slack_verification_token) {\n  return [{ json: { action: 'none', reply: { response_type: 'ephemeral', text: '⛔ Request not verified.' } } }];\n}\nconst cmd = String(b.command || '').toLowerCase();\nlet text = String(b.text || '').trim();\nlet roleId = null;\nconst m = text.match(/^(?:#|role:\\s*)(\\d+)\\s+/i);\nif (m) {\n  roleId = Number(m[1]);\n  text = text.slice(m[0].length).trim();\n}\nlet action = 'none';\nlet reply;\nif (cmd.indexOf('find') !== -1) {\n  if (!text || text.toLowerCase() === 'help') {\n    reply = { response_type: 'ephemeral', text: 'Ask in plain English, e.g. `/find who has 3+ years of GHL and speaks Arabic?`\\n' +\n      'Link results to a role so you can approve them: `/find #3 who has QuickBooks and Gusto?` (role numbers are in the portal).' };\n  } else {\n    action = 'find';\n    reply = { response_type: 'ephemeral', text: '🔎 Searching the CV database for: \"' + text + '\". Results in about 15 seconds…' };\n  }\n} else if (cmd.indexOf('jd') !== -1) {\n  if (text.length < 200) {\n    reply = { response_type: 'ephemeral', text: 'Paste the full call transcript after `/jd` (at least a few paragraphs). ' +\n      'For long transcripts use the portal: Roles → New role from transcript.' };\n  } else {\n    action = 'jd';\n    reply = { response_type: 'ephemeral', text: '📝 Writing the job description… it will appear in the channel for approval in about 20 seconds.' };\n  }\n} else {\n  reply = { response_type: 'ephemeral', text: 'Unknown command ' + cmd };\n}\nreturn [{ json: { action: action, reply: reply, question: text, role_id: roleId, response_url: b.response_url, user: b.user_name || 'someone' } }];\n"
+      },
+      "id": "25bab934-734e-5f45-aacc-d006ea52a196",
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "name": "Acknowledge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json.reply) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "c8e731a2-0acd-53c5-a09a-451559ba47e9",
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "24748fc7-6d2c-4ba0-8be0-d235622b3a94",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "find",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "find"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "b448c05f-1625-4b31-9892-6a1a81a3ecea",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "jd",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "jd"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "4345c8d2-12ff-5847-9184-044d228de6e0",
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "name": "Call Search API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__N8N_BASE_URL__/webhook/__WH__-search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ question: $('Verify Command').first().json.question, role_id: $('Verify Command').first().json.role_id, source: 'slack' }) }}",
+        "options": {
+          "timeout": 150000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_WEBHOOK__",
+          "name": "HG- Webhook Secret"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "2888d9da-4920-5dd8-b754-bc20391b8616",
+      "position": [
+        1560,
+        -200
+      ]
+    },
+    {
+      "name": "Results Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Posts the search answer back to the channel where /find was typed.\nconst cmd = $('Verify Command').first().json;\nconst r = $input.first().json || {};\nlet body;\nif (r.error || !r.ok) {\n  body = { response_type: 'ephemeral', replace_original: false,\n    text: '⚠️ Search failed: ' + String((r.error && (r.error.message || r.error)) || 'unknown error').slice(0, 300) };\n} else {\n  body = { response_type: 'in_channel', replace_original: false, text: r.text, blocks: r.blocks };\n}\nreturn [{ json: { url: cmd.response_url, body: body } }];\n"
+      },
+      "id": "0351e923-1082-511f-b8c1-4774b33f1512",
+      "position": [
+        1820,
+        -200
+      ]
+    },
+    {
+      "name": "Post Results",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "id": "dadd8d05-2738-55ef-8a02-11e4e2dea13a",
+      "position": [
+        2080,
+        -200
+      ]
+    },
+    {
+      "name": "Call JD Writer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__N8N_BASE_URL__/webhook/__WH__-transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ transcript: $('Verify Command').first().json.question, requested_by: $('Verify Command').first().json.user }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_WEBHOOK__",
+          "name": "HG- Webhook Secret"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "7aec6ee9-f661-56e3-86f8-f88ed7027e0a",
+      "position": [
+        1560,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Settings": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Verify Command",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verify Command": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "Call Search API",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Call JD Writer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Call Search API": {
+      "main": [
+        [
+          {
+            "node": "Results Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Results Message": {
+      "main": [
+        [
+          {
+            "node": "Post Results",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

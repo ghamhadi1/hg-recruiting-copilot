@@ -1,0 +1,504 @@
+{
+  "name": "HG- 01 Transcript to JD",
+  "nodes": [
+    {
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "__WH__-transcript",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "webhookId": "c5ebd888-7f6e-5216-aff4-7b4fb759f4f8",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_WEBHOOK__",
+          "name": "HG- Webhook Secret"
+        }
+      },
+      "id": "bb0c263a-8ec8-5b16-9ada-ea9120cf213b",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Accepted",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify({ ok: true, message: 'The JD is being written. It will appear in Slack for approval in about 20 seconds.' }) }}",
+        "options": {
+          "responseCode": 202
+        }
+      },
+      "id": "38076a33-f9b4-57d3-a501-55b7b3f8a7c6",
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "name": "Load Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_settings?select=key,value",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "6342d9a6-42e3-58c9-afb5-84ada745afe9",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the hg_settings rows (key/value) into one config object for this run.\nconst cfg = {};\nfor (const item of $input.all()) {\n  if (item.json && item.json.key) cfg[item.json.key] = item.json.value;\n}\nif (!cfg.openai_model) throw new Error('hg_settings is empty: run supabase/schema.sql and scripts/setup.py supabase');\ncfg.today = new Date().toISOString().slice(0, 10);\nreturn [{ json: cfg }];\n"
+      },
+      "id": "12df0197-2662-5773-a0ac-34c451fc8e14",
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "name": "Load Role",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "=__SUPABASE_URL__/rest/v1/hg_roles?select=*&id=eq.{{ Number($('Webhook').first().json.body.role_id) || 0 }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "id": "3c25b9b6-5b7d-5868-aee2-ae5ca5058530",
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "name": "Build JD Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Builds the OpenAI request that turns a call transcript into a structured job description.\n// Also handles \"request changes\": if role_id + feedback are sent, the previous JD is revised.\nconst body = $('Webhook').first().json.body || {};\nconst cfg = $('Config').first().json;\nconst old = $('Load Role').all().map(i => i.json).filter(r => r && r.id)[0] || null;\n\nconst transcript = String(body.transcript || (old && old.transcript) || '').trim();\nconst requestedBy = body.requested_by || 'portal';\nif (transcript.length < 200) {\n  return [{ json: { error: 'Transcript too short (' + transcript.length + ' characters). Paste the full call notes.', requested_by: requestedBy } }];\n}\n\nconst list = { type: 'array', items: { type: 'string' } };\nconst schema = {\n  type: 'object', additionalProperties: false,\n  required: ['title', 'client_summary_public', 'about_the_role', 'must_haves', 'nice_to_haves', 'responsibilities',\n    'languages', 'hours', 'employment_type', 'rate_band', 'start_date', 'reports_to', 'interview_process',\n    'internal_notes', 'open_questions', 'search_query'],\n  properties: {\n    title: { type: 'string' },\n    client_summary_public: { type: 'string', description: 'Anonymised one-liner about the client, no company name' },\n    about_the_role: { type: 'string', description: '3-4 sentence pitch for candidates' },\n    must_haves: list, nice_to_haves: list, responsibilities: list, languages: list,\n    hours: { type: 'string' }, employment_type: { type: 'string' }, rate_band: { type: 'string' },\n    start_date: { type: 'string' }, reports_to: { type: 'string' }, interview_process: { type: 'string' },\n    internal_notes: Object.assign({ description: 'Things the recruiter must know but candidates/client-facing JD must NOT show' }, list),\n    open_questions: Object.assign({ description: 'Missing or contradictory info the recruiter should confirm with the client' }, list),\n    search_query: { type: 'string', description: 'One plain-English candidate search, e.g. \"3+ years GoHighLevel, Zapier or Make, webhooks; Arabic preferred\"' }\n  }\n};\n\nconst system = [\n  'You are a senior recruiter at a remote-staffing agency that places people with US clients.',\n  'Write a clear, honest job description from the client call transcript.',\n  'Rules:',\n  '- Use ONLY facts stated in the transcript. If something is not stated, write \"Not specified\" and add it to open_questions.',\n  '- Must-haves = things the client called required/non-negotiable/minimum. Nice-to-haves = preferred/plus/bonus.',\n  '- Put numbers in requirements exactly as said (e.g. \"3+ years of GoHighLevel\").',\n  '- If the client changed their mind during the call, use the final answer and note the change in internal_notes.',\n  '- Never show private remarks (e.g. \"don\\'t tell them we can pay more\") in candidate-facing fields; put them in internal_notes.',\n  '- client_summary_public must not contain the client company name.',\n  '- Plain, friendly English. No buzzwords.'\n].join('\\n');\n\nlet user = 'Client (internal name): ' + (body.client_name || (old && old.client_name) || 'unknown') +\n  '\\n\\nCALL TRANSCRIPT:\\n\"\"\"\\n' + transcript.slice(0, 30000) + '\\n\"\"\"';\nif (old && body.feedback) {\n  user += '\\n\\nPREVIOUS JD (version ' + old.version + '):\\n' + (old.jd_markdown || '') +\n    '\\n\\nRECRUITER FEEDBACK (apply it exactly, keep everything else):\\n' + body.feedback;\n}\n\nreturn [{\n  json: {\n    role_id: old ? old.id : null,\n    client_name: body.client_name || (old && old.client_name) || null,\n    client_email: body.client_email || (old && old.client_email) || null,\n    transcript: transcript,\n    requested_by: requestedBy,\n    openai_body: {\n      model: cfg.openai_model,\n      temperature: 0.2,\n      response_format: { type: 'json_schema', json_schema: { name: 'job_description', strict: true, schema: schema } },\n      messages: [{ role: 'system', content: system }, { role: 'user', content: user }]\n    }\n  }\n}];\n"
+      },
+      "id": "47d515bc-85fa-5780-9f46-7db258570cb1",
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "name": "Transcript OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "44efe9f3-c74b-4fba-95e8-33f39a51475a",
+              "leftValue": "={{ !$json.error }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "acb67eb5-4a51-5106-817a-fa2d6dd8c109",
+      "position": [
+        1560,
+        0
+      ]
+    },
+    {
+      "name": "OpenAI: Write JD",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openai_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "__CRED_OPENAI__",
+          "name": "HG- OpenAI"
+        }
+      },
+      "id": "8c8e881c-8f4b-5a66-a117-a8baf6399fc8",
+      "position": [
+        1820,
+        -200
+      ]
+    },
+    {
+      "name": "Format JD",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Parses the JD from OpenAI and builds the public markdown + the payload for hg_role_save.\nconst req = $('Build JD Prompt').first().json;\nconst res = $input.first().json;\nlet jd;\ntry {\n  jd = JSON.parse(res.choices[0].message.content);\n} catch (e) {\n  throw new Error('OpenAI did not return a valid JD: ' + JSON.stringify(res).slice(0, 300));\n}\n\nconst bullets = arr => (arr || []).map(x => '- ' + x).join('\\n') || '- Not specified';\nconst md = [\n  '# ' + jd.title,\n  '_' + jd.client_summary_public + '_',\n  '',\n  '## About the role', jd.about_the_role, '',\n  '## Must-haves', bullets(jd.must_haves), '',\n  '## Nice-to-haves', bullets(jd.nice_to_haves), '',\n  '## What you will do', bullets(jd.responsibilities), '',\n  '## Languages', bullets(jd.languages), '',\n  '## Details',\n  '- Hours: ' + jd.hours,\n  '- Type: ' + jd.employment_type,\n  '- Pay: ' + jd.rate_band,\n  '- Start: ' + jd.start_date,\n  '- Reports to: ' + jd.reports_to,\n  '- Interview process: ' + jd.interview_process\n].join('\\n');\n\nreturn [{\n  json: {\n    p: {\n      id: req.role_id,\n      title: jd.title,\n      client_name: req.client_name,\n      client_email: req.client_email,\n      transcript: req.transcript,\n      jd: jd,\n      jd_markdown: md,\n      search_query: jd.search_query\n    }\n  }\n}];\n"
+      },
+      "id": "7ddf4c36-d486-5dce-8a1c-c695ff4ffdc4",
+      "position": [
+        2080,
+        -200
+      ]
+    },
+    {
+      "name": "Save Role",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_role_save",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "c3ba6cb6-486e-55e8-baac-24e4ecb1af72",
+      "position": [
+        2340,
+        -200
+      ]
+    },
+    {
+      "name": "JD Slack Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Slack approval message for a JD: summary + Approve / Request changes / Reject buttons.\nconst cfg = $('Config').first().json;\nconst role = $input.first().json;\nconst jd = role.jd || {};\nconst esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\nconst cut = (s, n) => (s.length > n ? s.slice(0, n - 1) + '…' : s);\nconst bl = arr => (arr || []).map(x => '• ' + esc(x)).join('\\n') || '• Not specified';\nconst id = String(role.id);\n\nconst blocks = [\n  { type: 'header', text: { type: 'plain_text', text: cut('📝 JD for approval: ' + role.title, 150) } },\n  { type: 'section', text: { type: 'mrkdwn', text: cut(\n    '*Client:* ' + esc(role.client_name || 'unknown') + '  (candidates see: _' + esc(jd.client_summary_public) + '_)\\n' +\n    '*Hours:* ' + esc(jd.hours) + '\\n*Pay:* ' + esc(jd.rate_band) + '\\n*Type:* ' + esc(jd.employment_type) +\n    '\\n*Start:* ' + esc(jd.start_date), 2900) } },\n  { type: 'section', text: { type: 'mrkdwn', text: cut('*Must-haves*\\n' + bl(jd.must_haves), 2900) } },\n  { type: 'section', text: { type: 'mrkdwn', text: cut('*Nice-to-haves*\\n' + bl(jd.nice_to_haves), 2900) } },\n  { type: 'section', text: { type: 'mrkdwn', text: cut('*About the role*\\n' + esc(jd.about_the_role), 2900) } }\n];\nif ((jd.open_questions || []).length) {\n  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: cut('⚠️ *Confirm with the client*\\n' + bl(jd.open_questions), 2900) } });\n}\nif ((jd.internal_notes || []).length) {\n  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: cut('🔒 Internal only: ' + jd.internal_notes.map(esc).join(' · '), 2900) }] });\n}\nblocks.push({\n  type: 'actions', block_id: 'jd_actions',\n  elements: [\n    { type: 'button', style: 'primary', action_id: 'jd_approve', value: id, text: { type: 'plain_text', text: '✅ Approve' } },\n    { type: 'button', action_id: 'jd_changes', value: id, text: { type: 'plain_text', text: '✏️ Request changes' } },\n    { type: 'button', style: 'danger', action_id: 'jd_reject', value: id, text: { type: 'plain_text', text: '❌ Reject' },\n      confirm: { title: { type: 'plain_text', text: 'Reject this JD?' }, text: { type: 'plain_text', text: 'Nothing will be sent to the client.' },\n        confirm: { type: 'plain_text', text: 'Reject' }, deny: { type: 'plain_text', text: 'Cancel' } } }\n  ]\n});\nconst portal = cfg.portal_url ? ' · <' + cfg.portal_url + '/role.html?id=' + id + '|Full JD in portal>' : '';\nblocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: 'Role #' + id + ' · version ' + role.version + portal +\n  ' · Nothing goes to the client until someone clicks Approve.' }] });\n\nreturn [{ json: { role_id: role.id, body: { channel: cfg.slack_channel_id, text: '📝 JD for approval: ' + role.title, blocks: blocks } } }];\n"
+      },
+      "id": "b0a32740-4b7d-5bba-aa76-c363f47deff5",
+      "position": [
+        2600,
+        -200
+      ]
+    },
+    {
+      "name": "Post for Approval",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "id": "0fc09f1d-7b8a-5500-8938-05e7b499976e",
+      "position": [
+        2860,
+        -200
+      ]
+    },
+    {
+      "name": "Slack OK?",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Slack returns HTTP 200 even on errors; fail loudly instead of silently.\nconst r = $input.first().json;\nif (!r.ok) throw new Error('Slack API error: ' + (r.error || JSON.stringify(r).slice(0, 200)) +\n  (r.error === 'not_in_channel' || r.error === 'channel_not_found' ? ' (invite the bot to the channel: /invite @HG Recruiting Copilot)' : ''));\nreturn [{ json: { channel: r.channel, ts: r.ts } }];\n"
+      },
+      "id": "10104f71-ffec-55b9-9567-e61a8b6655a5",
+      "position": [
+        3120,
+        -200
+      ]
+    },
+    {
+      "name": "Save Slack Message ID",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_role_set_slack",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_role_id: $('JD Slack Message').first().json.role_id, p_channel: $json.channel, p_ts: $json.ts }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "13c09365-4ce4-56ec-b047-1672b0551f3d",
+      "position": [
+        3380,
+        -200
+      ]
+    },
+    {
+      "name": "Error Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Transcript was rejected before calling the AI: tell the channel why.\nconst cfg = $('Config').first().json;\nconst j = $input.first().json;\nreturn [{ json: { body: { channel: cfg.slack_channel_id, text: '⚠️ Could not write a JD (requested by ' + j.requested_by + '): ' + j.error } } }];\n"
+      },
+      "id": "72c60be5-799f-5250-89f7-a7932d684192",
+      "position": [
+        1820,
+        200
+      ]
+    },
+    {
+      "name": "Post Error",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "id": "01d5d2a7-1b8e-58af-930a-5c0610a20d97",
+      "position": [
+        2080,
+        200
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Accepted",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Accepted": {
+      "main": [
+        [
+          {
+            "node": "Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Settings": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Load Role",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Role": {
+      "main": [
+        [
+          {
+            "node": "Build JD Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build JD Prompt": {
+      "main": [
+        [
+          {
+            "node": "Transcript OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transcript OK?": {
+      "main": [
+        [
+          {
+            "node": "OpenAI: Write JD",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI: Write JD": {
+      "main": [
+        [
+          {
+            "node": "Format JD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format JD": {
+      "main": [
+        [
+          {
+            "node": "Save Role",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Role": {
+      "main": [
+        [
+          {
+            "node": "JD Slack Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JD Slack Message": {
+      "main": [
+        [
+          {
+            "node": "Post for Approval",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Post for Approval": {
+      "main": [
+        [
+          {
+            "node": "Slack OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Slack OK?": {
+      "main": [
+        [
+          {
+            "node": "Save Slack Message ID",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Message": {
+      "main": [
+        [
+          {
+            "node": "Post Error",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

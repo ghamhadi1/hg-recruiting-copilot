@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Activity · HG Recruiting Copilot</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top" id="top"></header>
+<main>
+  <div class="head"><div><h1>Activity log</h1><div class="muted">Every approval, CV decision, email and reply, newest first.</div></div></div>
+  <div id="list"><div class="empty"><span class="spinner"></span> Loading…</div></div>
+</main>
+<script src="/app.js"></script>
+<script>
+HG.nav('activity');
+const icon = k => ({ cv_unreadable: '⚠️', cv_replaced: '🔁', cv_duplicate: '♻️', cv_older: '🕘', jd_created: '📝', jd_approve: '✅', jd_reject: '❌',
+  jd_changes: '✏️', candidate_approved: '✅', candidate_rejected: '❌', outreach_sent: '✉️', candidate_replied: '📬' }[k] || '•');
+HG.api('activity').then(({ events }) => {
+  document.getElementById('list').innerHTML = events.length ? '<div class="table-wrap"><table><thead><tr><th>When</th><th>What</th></tr></thead><tbody>' +
+    events.map(e => `<tr><td class="small muted" style="white-space:nowrap">${HG.date(e.created_at)}</td><td>${icon(e.kind)} ${HG.esc(e.message)}</td></tr>`).join('') +
+    '</tbody></table></div>' : '<div class="card empty">Nothing yet.</div>';
+}).catch(e => HG.fail(document.getElementById('list'), e));
+</script>
+</body>
+</html>

@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Test · HG Recruiting Copilot</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top" id="top"></header>
+<main>
+  <div class="head">
+    <div><h1>Bot test: 10 questions</h1>
+      <div class="muted">Questions written by us, with the right answers known from the test data. The bot is graded automatically.</div></div>
+    <button class="btn primary" id="run">▶ Run the test now</button>
+  </div>
+  <div id="summary"></div>
+  <div id="qs"><div class="empty"><span class="spinner"></span> Loading…</div></div>
+
+  <h2>Try your own question</h2>
+  <div class="card">
+    <div class="row"><div><input id="ask" placeholder="e.g. who has 3+ years of GHL and speaks Arabic?"></div>
+      <div style="flex:0 0 auto"><button class="btn" id="askBtn">Ask</button></div></div>
+    <div id="answer" style="margin-top:10px"></div>
+  </div>
+</main>
+<script src="/app.js"></script>
+<script>
+HG.nav('test');
+let polling = null;
+async function load() {
+  try {
+    const { questions, run } = await HG.api('test');
+    const byId = {};
+    if (run && run.results) run.results.forEach(r => { byId[r.id] = r; });
+    const sum = document.getElementById('summary');
+    if (!run) sum.innerHTML = '<div class="notice">No test run yet. Click <b>Run the test now</b> (takes about 2-3 minutes).</div>';
+    else if (run.status === 'running') {
+      sum.innerHTML = '<div class="notice"><span class="spinner"></span> Test running since ' + HG.date(run.started_at) + '… this page refreshes by itself.</div>';
+      if (!polling) polling = setInterval(load, 10000);
+    } else {
+      clearInterval(polling); polling = null;
+      sum.innerHTML = `<div class="card row" style="margin-bottom:16px;align-items:center">
+        <div style="flex:0 0 auto" class="big-score ${run.score >= 8 ? 'pass' : 'fail'}">${run.score}/${run.total}</div>
+        <div><b>Bot score</b><div class="muted small">Last run ${HG.date(run.finished_at)}. A question passes only if every expected person is in the
+        top 5, no wrong person is, nobody appears twice, every answer names its CV, and updated CVs are cited, not old ones.</div></div></div>`;
+    }
+    document.getElementById('qs').innerHTML = '<div class="table-wrap"><table><thead><tr><th>#</th><th>Question</th><th>Right answer</th><th>Bot answered</th><th>Result</th></tr></thead><tbody>' +
+      questions.map(q => {
+        const r = byId[q.id];
+        return `<tr><td>${q.id}</td><td><b>${HG.esc(q.question)}</b><div class="small muted">Tests: ${HG.esc(q.tests || '')}</div></td>
+          <td class="small">${HG.esc(q.expected_answer)}</td>
+          <td class="small">${r ? (r.results.length ? r.results.map(x => '<div><b>' + HG.esc(x.name) + '</b> ' + x.score + ' · <code>' + HG.esc(x.cv_file_name) + '</code></div>').join('')
+            : '<i>' + HG.esc(r.bot_answer || 'No good match') + '</i>') : '<span class="muted">not run</span>'}</td>
+          <td>${r ? (r.passed ? '<span class="pass">✔ pass</span>' : '<span class="fail">✘ fail</span><div class="small">' + r.problems.map(HG.esc).join('<br>') + '</div>') : ''}</td></tr>`;
+      }).join('') + '</tbody></table></div>';
+  } catch (e) { HG.fail(document.getElementById('qs'), e); }
+}
+document.getElementById('run').onclick = async e => {
+  e.target.disabled = true;
+  try { await HG.act('run_eval'); setTimeout(load, 2000); } catch (err) { alert(err.message); }
+  e.target.disabled = false;
+};
+document.getElementById('askBtn').onclick = async e => {
+  const out = document.getElementById('answer');
+  e.target.disabled = true;
+  out.innerHTML = '<span class="spinner"></span> Searching…';
+  try {
+    const r = await HG.act('search', { question: document.getElementById('ask').value });
+    let h = '<p><b>' + HG.esc(r.message) + '</b></p>';
+    h += r.results.map(x => `<div class="card" style="margin-bottom:8px"><b>${x.rank}. ${HG.esc(x.name)}</b> · ${HG.score(x.score)}
+      <div class="reason small">${HG.esc(x.reason)}</div><div class="small">📄 <code>${HG.esc(x.cv_file_name)}</code></div></div>`).join('');
+    if (r.no_match && r.closest.length) h += '<div class="small muted">Closest (not recommended): ' + r.closest.map(c => HG.esc(c.name) + ' ' + c.score + ' (' + HG.esc(c.gaps.join('; ')) + ')').join(' · ') + '</div>';
+    out.innerHTML = h;
+  } catch (err) { HG.fail(out, err); }
+  e.target.disabled = false;
+};
+load();
+</script>
+</body>
+</html>

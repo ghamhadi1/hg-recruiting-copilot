@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Roles · HG Recruiting Copilot</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top" id="top"></header>
+<main>
+  <div class="head">
+    <div>
+      <h1>Open roles</h1>
+      <div class="muted">Each role has a job description written from the client call, plus its shortlist. Approvals happen in Slack.</div>
+    </div>
+    <button class="btn primary" id="newBtn">+ New role from call transcript</button>
+  </div>
+
+  <div class="card" id="newForm" hidden style="margin-bottom:18px">
+    <h2 style="margin-top:0">New role from a call transcript</h2>
+    <p class="muted small">The AI writes the job description and posts it to Slack. Nothing reaches the client until someone clicks <b>Approve</b> there.</p>
+    <div class="row">
+      <div><label for="client">Client name (internal)</label><input id="client" placeholder="e.g. BrightPath Marketing"></div>
+      <div><label for="clientEmail">Client email (optional)</label><input id="clientEmail" type="email" placeholder="used after approval"></div>
+    </div>
+    <label for="transcript">Transcript or call notes</label>
+    <textarea id="transcript" placeholder="Paste the call transcript here…"></textarea>
+    <div class="row" style="margin-top:8px">
+      <div style="flex:0 1 auto"><input type="file" id="tfile" accept=".txt,.md,.vtt,.srt"></div>
+      <div style="flex:0 0 auto"><button class="btn primary" id="sendT">Write job description</button></div>
+    </div>
+    <p id="tmsg" class="small"></p>
+  </div>
+
+  <div id="list"><div class="empty"><span class="spinner"></span> Loading…</div></div>
+</main>
+<script src="/app.js"></script>
+<script>
+HG.nav('roles');
+const list = document.getElementById('list');
+async function load() {
+  try {
+    const { roles } = await HG.api('roles');
+    if (!roles.length) { list.innerHTML = '<div class="card empty">No roles yet. Click <b>+ New role</b> and paste a client call transcript.</div>'; return; }
+    list.innerHTML = '<div class="grid">' + roles.map(r => `
+      <a class="card" href="/role.html?id=${r.id}" style="color:inherit;text-decoration:none">
+        <div class="row" style="justify-content:space-between"><span class="muted small">#${r.id} · v${r.version}</span><span style="flex:0">${HG.badge(r.status)}</span></div>
+        <h2 style="margin:8px 0 2px">${HG.esc(r.title)}</h2>
+        <div class="muted small">${HG.esc(r.client_name || 'Client not named')} · created ${HG.date(r.created_at)}</div>
+        <div class="row small" style="margin-top:12px;gap:14px">
+          <span style="flex:0 0 auto"><b>${r.counts.suggested}</b> suggested</span>
+          <span style="flex:0 0 auto"><b>${r.counts.approved}</b> approved</span>
+          <span style="flex:0 0 auto"><b>${r.counts.replied}</b> replied</span>
+        </div>
+      </a>`).join('') + '</div>';
+  } catch (e) { HG.fail(list, e); }
+}
+document.getElementById('newBtn').onclick = () => { const f = document.getElementById('newForm'); f.hidden = !f.hidden; };
+document.getElementById('tfile').onchange = async e => {
+  const f = e.target.files[0];
+  if (f) document.getElementById('transcript').value = await f.text();
+};
+document.getElementById('sendT').onclick = async e => {
+  const btn = e.target, msg = document.getElementById('tmsg');
+  btn.disabled = true; msg.className = 'small'; msg.innerHTML = '<span class="spinner"></span> Sending to the AI…';
+  try {
+    const r = await HG.act('new_role', { transcript: document.getElementById('transcript').value,
+      client_name: document.getElementById('client').value, client_email: document.getElementById('clientEmail').value });
+    msg.className = 'small pass';
+    msg.textContent = '✅ ' + (r.message || 'Sent. Check Slack for the approval message.');
+    document.getElementById('transcript').value = '';
+    setTimeout(load, 25000);
+  } catch (err) { msg.className = 'small fail'; msg.textContent = '⚠️ ' + err.message; }
+  btn.disabled = false;
+};
+load();
+</script>
+</body>
+</html>

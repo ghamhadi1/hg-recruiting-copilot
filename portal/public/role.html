@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Role · HG Recruiting Copilot</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top" id="top"></header>
+<main id="main"><div class="empty"><span class="spinner"></span> Loading…</div></main>
+<script src="/app.js"></script>
+<script>
+HG.nav('roles');
+const main = document.getElementById('main');
+const id = new URLSearchParams(location.search).get('id');
+
+function outreachCell(s) {
+  const o = Array.isArray(s.hg_outreach) ? s.hg_outreach[0] : s.hg_outreach;
+  if (s.status !== 'approved') return '<span class="muted small">-</span>';
+  if (!o) return '<span class="badge warn">not started</span>';
+  let t = HG.badge(o.status) + ' <span class="small muted">' + o.step + '/' + o.max_steps + ' emails</span>';
+  if (o.status === 'active') t += '<br><button class="btn small" style="padding:3px 8px;margin-top:4px" data-stop="' + o.id + '">Stop</button>';
+  if (o.stopped_reason) t += '<div class="small muted">' + HG.esc(o.stopped_reason) + '</div>';
+  return t;
+}
+
+async function load() {
+  try {
+    const { role, shortlist } = await HG.api('role', { id });
+    document.title = role.title + ' · HG Recruiting Copilot';
+    const jd = role.jd || {};
+    const pending = role.status === 'pending_approval';
+    main.innerHTML = `
+      <p class="small"><a href="/">← All roles</a></p>
+      <div class="head">
+        <div><h1>${HG.esc(role.title)}</h1>
+        <div class="muted">#${role.id} · ${HG.esc(role.client_name || 'Client not named')} · version ${role.version}
+        ${role.decided_by ? ' · ' + HG.esc(role.status) + ' by ' + HG.esc(role.decided_by) + ' ' + HG.date(role.decided_at) : ''}</div></div>
+        <div style="flex:0 0 auto">${HG.badge(role.status)}</div>
+      </div>
+      ${pending ? '<div class="notice warn">This JD is waiting for approval in Slack. Nothing goes to the client until a recruiter clicks <b>Approve</b>.</div>' : ''}
+      <h2>Shortlist</h2>
+      ${shortlist.length ? `<div class="table-wrap"><table>
+        <thead><tr><th>Candidate</th><th>Score</th><th>Why (2 lines)</th><th>From CV</th><th>Decision</th><th>Outreach</th></tr></thead>
+        <tbody>${shortlist.map(s => `<tr>
+          <td><b>${HG.esc((s.hg_candidates || {}).full_name)}</b><div class="small muted">${HG.esc((s.hg_candidates || {}).location || '')}</div></td>
+          <td>${HG.score(s.score)}</td>
+          <td class="reason small">${HG.esc(s.reason)}${s.evidence ? '<div class="muted" style="margin-top:4px">“' + HG.esc(s.evidence) + '”</div>' : ''}</td>
+          <td><code>📄 ${HG.esc(s.cv_file_name)}</code>${s.hg_cvs && s.hg_cvs.status !== 'active' ? '<div>' + HG.badge(s.hg_cvs.status) + '</div>' : ''}</td>
+          <td>${HG.badge(s.status)}${s.decided_by ? '<div class="small muted">by ' + HG.esc(s.decided_by) + '</div>' : ''}</td>
+          <td>${outreachCell(s)}</td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="card empty">' + (role.status === 'approved' ? 'No shortlist yet. It is built automatically after approval, or run <code>/find #' + role.id + ' your question</code> in Slack.' : 'The shortlist is built after the JD is approved.') + '</div>'}
+      <p class="small muted">Approve or reject candidates with the buttons in Slack. Scores under 60 are never recommended.</p>
+      <h2>Job description</h2>
+      <div class="card jd">${HG.md(role.jd_markdown)}</div>
+      ${(jd.open_questions || []).length ? '<h2>To confirm with the client</h2><div class="card"><ul>' + jd.open_questions.map(q => '<li>' + HG.esc(q) + '</li>').join('') + '</ul></div>' : ''}
+      ${(jd.internal_notes || []).length ? '<h2>Internal notes (never shown to candidates)</h2><div class="card"><ul>' + jd.internal_notes.map(q => '<li>' + HG.esc(q) + '</li>').join('') + '</ul></div>' : ''}
+      ${role.feedback ? '<h2>Last change request</h2><div class="card">' + HG.esc(role.feedback) + '</div>' : ''}
+      <p class="small muted">Search query used for the shortlist: <code>${HG.esc(role.search_query || '')}</code></p>`;
+    main.querySelectorAll('[data-stop]').forEach(b => b.onclick = async () => {
+      if (!confirm('Stop the email sequence for this candidate?')) return;
+      b.disabled = true;
+      try { await HG.act('stop_outreach', { outreach_id: b.dataset.stop }); load(); } catch (e) { alert(e.message); b.disabled = false; }
+    });
+  } catch (e) { HG.fail(main, e); }
+}
+load();
+</script>
+</body>
+</html>

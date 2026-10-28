@@ -1,0 +1,92 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>CVs · HG Recruiting Copilot</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header class="top" id="top"></header>
+<main>
+  <div class="head">
+    <div><h1>CV library</h1><div class="muted">Every file we received and what happened to it. Nothing is skipped silently.</div></div>
+  </div>
+  <div class="card" style="margin-bottom:18px">
+    <b>Add CVs</b> <span class="muted small">PDF or Word. Scanned PDFs are read with OCR. Updated CVs replace the old one automatically.</span>
+    <div class="row" style="margin-top:8px">
+      <div><input type="file" id="files" multiple accept=".pdf,.docx,.doc"></div>
+      <div style="flex:0 0 auto"><button class="btn primary" id="up">Upload</button></div>
+    </div>
+    <div id="upLog" class="small" style="margin-top:8px"></div>
+  </div>
+  <div id="stats"></div>
+  <div id="flags"></div>
+  <h2>All files</h2>
+  <div class="row" style="margin-bottom:10px">
+    <div><input id="q" placeholder="Filter by file or person…"></div>
+    <div style="flex:0 1 220px"><select id="st"><option value="">All statuses</option><option>active</option><option>duplicate</option>
+      <option>superseded</option><option value="older_version">older version</option><option>unreadable</option></select></div>
+  </div>
+  <div id="list"><div class="empty"><span class="spinner"></span> Loading…</div></div>
+</main>
+<script src="/app.js"></script>
+<script>
+HG.nav('cvs');
+let files = [];
+const explain = { active: 'Searchable', duplicate: 'Same CV sent again: kept once', superseded: 'Replaced by a newer CV',
+  older_version: 'Older than the CV we have', unreadable: 'Could not be read: needs a new copy' };
+function renderList() {
+  const q = document.getElementById('q').value.toLowerCase(), st = document.getElementById('st').value;
+  const rows = files.filter(f => (!st || f.status === st) &&
+    (!q || (f.file_name + ' ' + ((f.hg_candidates || {}).full_name || '')).toLowerCase().includes(q)));
+  document.getElementById('list').innerHTML = rows.length ? `<div class="table-wrap"><table>
+    <thead><tr><th>File</th><th>Person</th><th>Status</th><th>Read by</th><th>Received</th></tr></thead><tbody>
+    ${rows.map(f => `<tr><td><code>${HG.esc(f.file_name)}</code></td><td>${HG.esc((f.hg_candidates || {}).full_name || '-')}</td>
+      <td>${HG.badge(f.status)}<div class="small muted">${HG.esc(f.status_note || explain[f.status] || '')}</div></td>
+      <td class="small">${f.extraction_method === 'ocr' ? '🔍 OCR (scan)' : f.extraction_method === 'text' ? 'Text' : '-'}</td>
+      <td class="small muted">${HG.date(f.uploaded_at)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="card empty">No files match.</div>';
+}
+async function load() {
+  try {
+    const d = await HG.api('cvs');
+    files = d.files;
+    const s = d.summary;
+    document.getElementById('stats').innerHTML = '<div class="stats">' +
+      [['Files received', s.files], ['Unique people', s.people], ['Searchable', s.active], ['Duplicates', s.duplicate],
+       ['Replaced / older', s.superseded], ['Read with OCR', s.ocr], ['Unreadable', s.unreadable, s.unreadable ? 'bad' : '']]
+        .map(x => `<div class="stat ${x[2] || ''}"><b>${x[1]}</b><span class="small muted">${x[0]}</span></div>`).join('') + '</div>';
+    const bad = files.filter(f => f.status === 'unreadable');
+    document.getElementById('flags').innerHTML = bad.length ? '<div class="notice bad"><b>⚠️ ' + bad.length + ' unreadable CV' + (bad.length > 1 ? 's' : '') +
+      ' flagged.</b> These are NOT searchable. Ask for a text PDF or Word file:<ul>' +
+      bad.map(f => '<li><code>' + HG.esc(f.file_name) + '</code>: ' + HG.esc(f.status_note) + '</li>').join('') + '</ul></div>' : '';
+    renderList();
+  } catch (e) { HG.fail(document.getElementById('list'), e); }
+}
+document.getElementById('q').oninput = renderList;
+document.getElementById('st').onchange = renderList;
+document.getElementById('up').onclick = async e => {
+  const input = document.getElementById('files'), log = document.getElementById('upLog');
+  if (!input.files.length) return;
+  e.target.disabled = true;
+  log.innerHTML = '';
+  for (const f of input.files) {
+    const line = document.createElement('div');
+    line.innerHTML = '<span class="spinner"></span> ' + HG.esc(f.name);
+    log.appendChild(line);
+    try {
+      if (f.size > 3.2 * 1024 * 1024) throw new Error('File is over 3 MB. Please compress it.');
+      const r = await HG.act('upload_cv', { file_name: f.name, mime_type: f.type, data_base64: await HG.fileToBase64(f) });
+      const what = { new: '✅ new candidate', replaced: '🔁 replaced an older CV of ' + (r.name || ''), duplicate_file: '♻️ identical file already stored',
+        duplicate_person: '♻️ same person, same CV (kept once)', older_ignored: '🕘 older than the CV we have', unreadable: '⚠️ unreadable: ' + (r.reason || '') }[r.action] || r.action;
+      line.innerHTML = HG.esc(f.name) + ': ' + HG.esc(what) + (r.extraction_method === 'ocr' ? ' (read with OCR)' : '');
+    } catch (err) { line.innerHTML = '<span class="fail">' + HG.esc(f.name) + ': ' + HG.esc(err.message) + '</span>'; }
+  }
+  e.target.disabled = false;
+  input.value = '';
+  load();
+};
+load();
+</script>
+</body>
+</html>

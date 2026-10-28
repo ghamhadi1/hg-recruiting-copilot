@@ -1,0 +1,32 @@
+display_information:
+  name: HG Recruiting Copilot
+  description: Writes job descriptions, finds the best candidates, runs outreach. A recruiter approves every step.
+  background_color: "#2f5bea"
+features:
+  bot_user:
+    display_name: HG Recruiting Copilot
+    always_online: true
+  slash_commands:
+    - command: /find
+      url: __N8N_BASE_URL__/webhook/__WH__-slack-command
+      description: Find the best candidates in plain English
+      usage_hint: "who has 3+ years of GHL and speaks Arabic?"
+      should_escape: false
+    - command: /jd
+      url: __N8N_BASE_URL__/webhook/__WH__-slack-command
+      description: Turn a call transcript into a job description
+      usage_hint: "paste the call transcript"
+      should_escape: false
+oauth_config:
+  scopes:
+    bot:
+      - chat:write
+      - chat:write.public
+      - commands
+settings:
+  interactivity:
+    is_enabled: true
+    request_url: __N8N_BASE_URL__/webhook/__WH__-slack-action
+  org_deploy_enabled: false
+  socket_mode_enabled: false
+  token_rotation_enabled: false

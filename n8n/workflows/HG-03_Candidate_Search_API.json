@@ -1,0 +1,555 @@
+{
+  "name": "HG- 03 Candidate Search API",
+  "nodes": [
+    {
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "__WH__-search",
+        "responseMode": "responseNode",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "webhookId": "94695c21-50b6-5970-b2e4-9958c1a9317c",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_WEBHOOK__",
+          "name": "HG- Webhook Secret"
+        }
+      },
+      "id": "7c49a696-2fbf-5fab-8a6b-669f05964899",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Load Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_settings?select=key,value",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "91265321-5fd2-5631-8d53-be47443b9f57",
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the hg_settings rows (key/value) into one config object for this run.\nconst cfg = {};\nfor (const item of $input.all()) {\n  if (item.json && item.json.key) cfg[item.json.key] = item.json.value;\n}\nif (!cfg.openai_model) throw new Error('hg_settings is empty: run supabase/schema.sql and scripts/setup.py supabase');\ncfg.today = new Date().toISOString().slice(0, 10);\nreturn [{ json: cfg }];\n"
+      },
+      "id": "ac422218-f801-558b-81f2-b4dfa578eb48",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "name": "Load Role",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "=__SUPABASE_URL__/rest/v1/hg_roles?select=*&status=eq.approved&id=eq.{{ Number($('Webhook').first().json.body.role_id) || 0 }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "id": "3c4776e5-3c7c-5c33-9bdf-260f13b5847f",
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "name": "Open Roles",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_roles?select=id,title,client_name&status=eq.approved&order=id.desc",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "id": "eeaa1b81-d760-50c0-b3fb-7707b0be2dcb",
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "name": "Build Parse Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Step 1 of search: turn the plain-English question into structured requirements.\nconst body = $('Webhook').first().json.body || {};\nconst cfg = $('Config').first().json;\nconst role = $('Load Role').all().map(i => i.json).filter(r => r && r.id)[0] || null;\nconst question = String(body.question || (role && role.search_query) || '').trim().slice(0, 1000);\nif (!question) throw new Error('Empty question');\n\nconst schema = {\n  type: 'object', additionalProperties: false,\n  required: ['skills', 'languages', 'location', 'other_requirements', 'semantic_query', 'search_terms'],\n  properties: {\n    skills: { type: 'array', items: { type: 'object', additionalProperties: false,\n      required: ['name', 'synonyms', 'min_years', 'required'],\n      properties: { name: { type: 'string' }, synonyms: { type: 'array', items: { type: 'string' } },\n        min_years: { type: ['number', 'null'] }, required: { type: 'boolean' } } } },\n    languages: { type: 'array', items: { type: 'object', additionalProperties: false, required: ['language', 'required'],\n      properties: { language: { type: 'string' }, required: { type: 'boolean' } } } },\n    location: { type: ['string', 'null'] },\n    other_requirements: { type: 'array', items: { type: 'string' } },\n    semantic_query: { type: 'string' },\n    search_terms: { type: 'array', items: { type: 'string' } }\n  }\n};\nconst system = [\n  'Turn a recruiter\\'s candidate search into structured requirements.',\n  'skills: concrete tools, skills or job functions. Canonical names: GoHighLevel (GHL/HighLevel), QuickBooks Online (QBO), n8n, Zapier,',\n  'Make, React, Node.js, TypeScript, AWS, Xero, Gusto, Salesforce, HubSpot, Cold calling, Appointment setting,',\n  'Transaction coordination, Calendar management. synonyms: other spellings/abbreviations of the same thing (not related tools).',\n  'Alternatives: \"X or Y\" is ONE skill named X with Y in its synonyms (either one satisfies it). Never list X and Y separately.',\n  'required = true unless the recruiter says preferred / nice to have / bonus / ideally. min_years only if a number is given (\"3+ years\" = 3).',\n  'languages: spoken languages mentioned (\"speaks Arabic\", \"bilingual Spanish\"). required = true unless \"preferred\".',\n  'other_requirements: anything else (industry like \"solar\", location, seniority) in short phrases.',\n  'search_terms: canonical names + synonyms + languages + key industry words, for keyword matching.',\n  'semantic_query: one sentence describing the ideal candidate.'\n].join('\\n');\n\nreturn [{\n  json: {\n    question: question,\n    role: role,\n    role_id: role ? role.id : null,\n    source: body.source || 'api',\n    save: body.save !== false,\n    openai_body: {\n      model: cfg.openai_model, temperature: 0,\n      response_format: { type: 'json_schema', json_schema: { name: 'search_request', strict: true, schema: schema } },\n      messages: [{ role: 'system', content: system }, { role: 'user', content: question }]\n    }\n  }\n}];\n"
+      },
+      "id": "d803c8e2-698e-5397-917f-316926eb10cc",
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "name": "OpenAI: Understand Question",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openai_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "__CRED_OPENAI__",
+          "name": "HG- OpenAI"
+        }
+      },
+      "id": "59bd87a4-b022-5045-9847-3cf419d79eb1",
+      "position": [
+        1560,
+        0
+      ]
+    },
+    {
+      "name": "Parse Query",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Reads the parsed requirements and prepares the embedding request + keyword list.\nconst prev = Object.assign({}, $('Build Parse Prompt').first().json);\ndelete prev.openai_body;\nconst cfg = $('Config').first().json;\nlet parsed;\ntry {\n  parsed = JSON.parse($input.first().json.choices[0].message.content);\n} catch (e) {\n  throw new Error('Could not parse the question: ' + JSON.stringify($input.first().json).slice(0, 300));\n}\nconst terms = [];\nconst add = t => {\n  t = String(t || '').trim();\n  if (t.length > 1 && terms.map(x => x.toLowerCase()).indexOf(t.toLowerCase()) === -1) terms.push(t);\n};\n(parsed.skills || []).forEach(s => { add(s.name); (s.synonyms || []).forEach(add); });\n(parsed.languages || []).forEach(l => add(l.language));\n(parsed.search_terms || []).forEach(add);\nreturn [{ json: Object.assign(prev, { parsed: parsed, terms: terms.slice(0, 25),\n  embed_body: { model: cfg.embedding_model, input: parsed.semantic_query || prev.question } }) }];\n"
+      },
+      "id": "36bbb4af-a841-5f4a-857a-fb6a37e5c8a7",
+      "position": [
+        1820,
+        0
+      ]
+    },
+    {
+      "name": "OpenAI: Embed Question",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/embeddings",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.embed_body) }}",
+        "options": {
+          "timeout": 60000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "__CRED_OPENAI__",
+          "name": "HG- OpenAI"
+        }
+      },
+      "id": "6b0a886c-e3a2-569c-bb4f-79fdbe5b426c",
+      "position": [
+        2080,
+        0
+      ]
+    },
+    {
+      "name": "Search DB",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_search_candidates",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_embedding: $json.data[0].embedding, p_terms: $('Parse Query').first().json.terms, p_limit: 20 }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "alwaysOutputData": true,
+      "id": "0aadd272-b5bb-51d5-b61e-7bef55b4a8cd",
+      "position": [
+        2340,
+        0
+      ]
+    },
+    {
+      "name": "Build Rank Prompt",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Step 3: the model scores ONLY the candidates the database returned (it cannot see or invent anyone else).\nconst q = $('Parse Query').first().json;\nconst cfg = $('Config').first().json;\nconst cands = $input.all().map(i => i.json).filter(c => c && c.candidate_id).slice(0, 20);\n\nconst schema = {\n  type: 'object', additionalProperties: false, required: ['results', 'note'],\n  properties: {\n    results: { type: 'array', items: { type: 'object', additionalProperties: false,\n      required: ['candidate_id', 'score', 'reason_line_1', 'reason_line_2', 'evidence'],\n      properties: {\n        candidate_id: { type: 'integer' }, score: { type: 'integer' },\n        reason_line_1: { type: 'string' }, reason_line_2: { type: 'string' },\n        evidence: { type: 'string', description: 'Exact quote copied from this candidate\\'s CV text, max 15 words' }\n      } } },\n    note: { type: 'string' }\n  }\n};\nconst system = [\n  'You rank candidates for a recruiter. Use ONLY the CV text given for each candidate. Never invent facts or candidates.',\n  'Score 0-100: required skills/requirements met = 50, years of experience vs. what was asked = 20,',\n  'nice-to-haves and other requirements = 15, language/location fit = 15.',\n  'If ANY required item is missing, or below the minimum years asked, the score MUST be below 60.',\n  'reason_line_1: why they fit, with concrete numbers (max 20 words). reason_line_2: the main gap or risk, or an extra strength (max 20 words).',\n  'evidence: a short exact quote copied character-for-character from that candidate\\'s CV text that proves reason_line_1.',\n  'Only use candidate_id values from the list. Return at most 8 candidates, best first. Skip clearly irrelevant people.',\n  'If nobody fits, return the closest 1-2 with honest low scores.'\n].join('\\n');\nconst list = cands.map(c =>\n  '### candidate_id: ' + c.candidate_id + '\\nName: ' + c.full_name + '\\nCV file: ' + c.cv_file_name +\n  '\\nLocation: ' + (c.location || '?') + '\\nLanguages (parsed): ' + JSON.stringify(c.languages) +\n  '\\nSkills with years (parsed): ' + JSON.stringify(c.skills) + '\\nCV TEXT:\\n' + String(c.cv_text || '').slice(0, 3500)\n).join('\\n\\n');\nconst user = 'TODAY: ' + cfg.today + '\\nREQUEST: ' + q.question + '\\nPARSED REQUIREMENTS: ' + JSON.stringify(q.parsed) +\n  (q.role ? '\\nROLE: ' + q.role.title + '\\nMUST-HAVES: ' + JSON.stringify((q.role.jd || {}).must_haves || []) : '') +\n  '\\n\\nCANDIDATES (' + cands.length + '):\\n\\n' + (list || '(none)');\n\nreturn [{\n  json: {\n    candidate_count: cands.length,\n    openai_body: {\n      model: cfg.openai_model, temperature: 0,\n      response_format: { type: 'json_schema', json_schema: { name: 'ranking', strict: true, schema: schema } },\n      messages: [{ role: 'system', content: system }, { role: 'user', content: user }]\n    }\n  }\n}];\n"
+      },
+      "id": "7484fd04-c03a-53ef-b861-6a24f6bf951c",
+      "position": [
+        2600,
+        0
+      ]
+    },
+    {
+      "name": "OpenAI: Score Candidates",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "openAiApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.openai_body) }}",
+        "options": {
+          "timeout": 120000
+        }
+      },
+      "credentials": {
+        "openAiApi": {
+          "id": "__CRED_OPENAI__",
+          "name": "HG- OpenAI"
+        }
+      },
+      "id": "b1becd12-d933-5183-9069-517acc994eb1",
+      "position": [
+        2860,
+        0
+      ]
+    },
+    {
+      "name": "Guard & Score",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Step 4: deterministic safety net over the model's ranking.\n//  - drops any candidate id that is not in the database results (no invented people)\n//  - one row per person, every row names its CV file\n//  - hard checks: required language (not \"basic\"), required skill present, minimum years\n//  - the evidence quote must really be in that CV\n//  Any failed check caps the score below the threshold, so it can't be recommended.\nconst cfg = $('Config').first().json;\nconst q = $('Parse Query').first().json;\nconst parsed = q.parsed || {};\nconst threshold = Number(cfg.match_threshold || 60);\nconst cands = $('Search DB').all().map(i => i.json).filter(c => c && c.candidate_id);\nconst byId = {};\ncands.forEach(c => { byId[c.candidate_id] = c; });\n\nlet llm;\ntry {\n  llm = JSON.parse($input.first().json.choices[0].message.content);\n} catch (e) {\n  throw new Error('Ranking returned invalid JSON: ' + JSON.stringify($input.first().json).slice(0, 300));\n}\n\nconst norm = s => String(s == null ? '' : s).toLowerCase().replace(/\\s+/g, ' ').trim();\nconst flat = s => norm(s).replace(/[^a-z0-9؀-ۿ+.# ]/g, ' ').replace(/\\s+/g, ' ').trim();\nconst WEAK = /(basic|beginner|elementary|\\ba1\\b|\\ba2\\b|reading|limited)/i;\n\nfunction langOk(c, lang) {\n  const L = norm(lang);\n  const list = c.languages || [];\n  if (list.length) return list.some(l => norm(l.language).indexOf(L) !== -1 && !WEAK.test(l.level || ''));\n  return norm(c.cv_text).indexOf(L) !== -1;\n}\nfunction skillCheck(c, s) {\n  const names = [s.name].concat(s.synonyms || []).map(norm).filter(n => n.length > 1);\n  let found = false;\n  let years = null;\n  (c.skills || []).forEach(k => {\n    const kn = norm(k.name);\n    if (names.some(n => kn.indexOf(n) !== -1 || (kn.length > 2 && n.indexOf(kn) !== -1))) {\n      found = true;\n      if (typeof k.years === 'number') years = Math.max(years || 0, k.years);\n    }\n  });\n  if (!found) {\n    const t = norm(c.cv_text);\n    found = names.some(n => t.indexOf(n) !== -1);\n  }\n  return { found: found, years: years };\n}\nfunction evidenceOk(c, ev) {\n  const t = flat(c.cv_text);\n  const e = flat(ev);\n  if (!e) return false;\n  if (t.indexOf(e) !== -1) return true;\n  const words = e.split(' ').filter(w => w.length > 2);\n  if (!words.length) return false;\n  return words.filter(w => t.indexOf(w) !== -1).length / words.length >= 0.8;\n}\n\nconst seen = {};\nconst dropped = [];\nconst scored = [];\n(llm.results || []).forEach(r => {\n  const c = byId[r.candidate_id];\n  if (!c) { dropped.push(r.candidate_id); return; }\n  if (seen[c.candidate_id]) return;\n  seen[c.candidate_id] = true;\n  let score = Math.max(0, Math.min(100, Math.round(Number(r.score) || 0)));\n  const gaps = [];\n  (parsed.languages || []).filter(l => l.required).forEach(l => {\n    if (!langOk(c, l.language)) gaps.push('does not speak ' + l.language + ' (fluently)');\n  });\n  (parsed.skills || []).filter(s => s.required).forEach(s => {\n    const k = skillCheck(c, s);\n    if (!k.found) gaps.push('no ' + s.name + ' in CV');\n    else if (s.min_years && k.years !== null && k.years + 0.05 < s.min_years) gaps.push(k.years + ' yrs ' + s.name + ', needs ' + s.min_years + '+');\n  });\n  const evOk = evidenceOk(c, r.evidence);\n  if (!evOk) gaps.push('quote not found in CV');\n  if (gaps.length) score = Math.min(score, threshold - 1);\n  scored.push({\n    candidate_id: c.candidate_id, cv_id: c.cv_id, cv_file_name: c.cv_file_name,\n    name: c.full_name, email: c.email, location: c.location, score: score,\n    reason: [r.reason_line_1, r.reason_line_2].map(s => String(s || '').trim()).filter(Boolean).join('\\n'),\n    evidence: r.evidence, evidence_verified: evOk, gaps: gaps\n  });\n});\nscored.sort((a, b) => b.score - a.score);\nconst good = scored.filter(s => s.score >= threshold).slice(0, 5);\ngood.forEach((s, i) => { s.rank = i + 1; });\nconst closest = scored.filter(s => s.score < threshold).slice(0, 2);\nconst noMatch = good.length === 0;\nconst message = noMatch\n  ? 'No good match: nobody scored ' + threshold + '+ out of 100.' +\n    (closest.length ? ' Closest: ' + closest.map(c => c.name + ' (' + c.score + ', ' + (c.gaps.join('; ') || 'weak fit') + ')').join(' | ') : ' No one in the CV database is close.')\n  : 'Top ' + good.length + ' candidate' + (good.length > 1 ? 's' : '');\n\nreturn [{\n  json: {\n    question: q.question, role: q.role, role_id: q.role_id, source: q.source, save: q.save,\n    parsed: parsed, threshold: threshold, no_match: noMatch, message: message,\n    results: good, closest: closest, dropped_ids: dropped, considered: cands.length,\n    save_payload: {\n      p: {\n        question: q.question, role_id: q.role_id, source: q.source, parsed: parsed, no_match: noMatch, message: message,\n        results: good.map(g => ({ candidate_id: g.candidate_id, cv_id: g.cv_id, cv_file_name: g.cv_file_name, rank: g.rank,\n          score: g.score, reason: g.reason, evidence: g.evidence }))\n      }\n    }\n  }\n}];\n"
+      },
+      "id": "2cc05aac-58e4-5b77-97e2-7ff91e274a05",
+      "position": [
+        3120,
+        0
+      ]
+    },
+    {
+      "name": "Save?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "92df9552-f70e-4bc4-87a2-13ac72bf1eb7",
+              "leftValue": "={{ $json.save }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "6fe8c55b-7c96-5cb3-93ee-1c1938837c18",
+      "position": [
+        3380,
+        0
+      ]
+    },
+    {
+      "name": "Save Search",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_save_search",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.save_payload) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "62e570d9-b3fb-576e-822a-76311a45003f",
+      "position": [
+        3640,
+        -200
+      ]
+    },
+    {
+      "name": "Format Answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Final answer: JSON for the portal/eval + ready-made Slack blocks with Approve buttons.\nconst g = Object.assign({}, $('Guard & Score').first().json);\ndelete g.save_payload;\nconst cfg = $('Config').first().json;\nconst saved = $input.first().json && $input.first().json.search_id ? $input.first().json : null;\nconst roles = $('Open Roles').all().map(i => i.json).filter(r => r && r.id);\nconst esc = s => String(s == null ? '' : s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');\n\nconst idByCand = {};\nif (saved) (saved.items || []).forEach(it => { idByCand[it.candidate_id] = it.shortlist_id; });\ng.results.forEach(r => { r.shortlist_id = idByCand[r.candidate_id] || null; });\ng.search_id = saved ? saved.search_id : null;\n\nconst blocks = [{ type: 'section', text: { type: 'mrkdwn', text: '🔎 *' + esc(g.question) + '*' +\n  (g.role ? '\\nFor role: *' + esc(g.role.title) + '* (#' + g.role.id + ')' : '') } }];\n\nif (g.no_match) {\n  let t = '🤷 *No good match.* Nobody scored ' + g.threshold + '+ out of 100, so I am not recommending anyone.';\n  g.closest.forEach(c => {\n    t += '\\n• Closest: *' + esc(c.name) + '* (' + c.score + '/100): ' + esc(c.gaps.join('; ') || 'weak fit') + ' · 📄 `' + esc(c.cv_file_name) + '`';\n  });\n  if (!g.closest.length) t += '\\nNo one in the CV database is even close.';\n  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: t.slice(0, 2900) } });\n}\n\ng.results.forEach(r => {\n  blocks.push({ type: 'divider' });\n  blocks.push({ type: 'section', text: { type: 'mrkdwn', text: ('*' + r.rank + '. ' + esc(r.name) + '*  ·  *' + r.score + '/100*\\n' +\n    esc(r.reason) + '\\n📄 CV: `' + esc(r.cv_file_name) + '`').slice(0, 2900) } });\n  if (!r.shortlist_id) return;\n  const els = [];\n  if (g.role) {\n    els.push({ type: 'button', style: 'primary', action_id: 'cand_approve', value: String(r.shortlist_id),\n      text: { type: 'plain_text', text: '✅ Approve for outreach' } });\n  } else if (roles.length) {\n    els.push({ type: 'static_select', action_id: 'cand_approve_role', placeholder: { type: 'plain_text', text: '✅ Approve for role…' },\n      options: roles.slice(0, 100).map(x => ({ text: { type: 'plain_text', text: ('#' + x.id + ' ' + x.title).slice(0, 75) },\n        value: r.shortlist_id + ':' + x.id })) });\n  }\n  els.push({ type: 'button', action_id: 'cand_reject', value: String(r.shortlist_id), text: { type: 'plain_text', text: '❌ Not a fit' } });\n  blocks.push({ type: 'actions', elements: els });\n});\nif (!g.role && !roles.length && g.results.length) {\n  blocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: 'No approved roles yet, so there is nothing to approve these candidates for.' }] });\n}\nblocks.push({ type: 'context', elements: [{ type: 'mrkdwn', text: 'Score = must-haves 50 · experience 20 · nice-to-haves 15 · language/location 15. ' +\n  'Under ' + g.threshold + ' is never recommended. Only real CVs from the database are used.' +\n  (cfg.portal_url ? ' <' + cfg.portal_url + '|Portal>' : '') }] });\n\ng.text = g.no_match ? g.message : g.message + ' for \"' + g.question + '\"';\ng.blocks = blocks.slice(0, 50);\ng.ok = true;\nreturn [{ json: g }];\n"
+      },
+      "id": "cb79c32e-0383-592c-95f7-f19de8aebf25",
+      "position": [
+        3900,
+        0
+      ]
+    },
+    {
+      "name": "Respond",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "responseCode": 200
+        }
+      },
+      "id": "81b5afba-96b1-5db9-ad97-0b2d1c7c96f2",
+      "position": [
+        4160,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Settings": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Load Role",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Role": {
+      "main": [
+        [
+          {
+            "node": "Open Roles",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Open Roles": {
+      "main": [
+        [
+          {
+            "node": "Build Parse Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Parse Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI: Understand Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI: Understand Question": {
+      "main": [
+        [
+          {
+            "node": "Parse Query",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Query": {
+      "main": [
+        [
+          {
+            "node": "OpenAI: Embed Question",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI: Embed Question": {
+      "main": [
+        [
+          {
+            "node": "Search DB",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Search DB": {
+      "main": [
+        [
+          {
+            "node": "Build Rank Prompt",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Rank Prompt": {
+      "main": [
+        [
+          {
+            "node": "OpenAI: Score Candidates",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "OpenAI: Score Candidates": {
+      "main": [
+        [
+          {
+            "node": "Guard & Score",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Guard & Score": {
+      "main": [
+        [
+          {
+            "node": "Save?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save?": {
+      "main": [
+        [
+          {
+            "node": "Save Search",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Format Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save Search": {
+      "main": [
+        [
+          {
+            "node": "Format Answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Format Answer": {
+      "main": [
+        [
+          {
+            "node": "Respond",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

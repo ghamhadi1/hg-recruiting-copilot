@@ -1,0 +1,785 @@
+{
+  "name": "HG- 06 Outreach Sequencer",
+  "nodes": [
+    {
+      "name": "Every 5 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "b688fc40-456b-5d2f-a75c-2fb88610c2dc",
+      "position": [
+        0,
+        -200
+      ]
+    },
+    {
+      "name": "Run Now",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "__WH__-outreach-run",
+        "responseMode": "onReceived",
+        "options": {},
+        "authentication": "headerAuth"
+      },
+      "webhookId": "8f20fd8e-dad4-57be-b47d-c6916e759553",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_WEBHOOK__",
+          "name": "HG- Webhook Secret"
+        }
+      },
+      "id": "aa2446f5-f233-59d2-be2e-55a017a810bf",
+      "position": [
+        0,
+        200
+      ]
+    },
+    {
+      "name": "Load Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_settings?select=key,value",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "69a2218a-7d07-54ff-ba5d-991f93bb0b5a",
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the hg_settings rows (key/value) into one config object for this run.\nconst cfg = {};\nfor (const item of $input.all()) {\n  if (item.json && item.json.key) cfg[item.json.key] = item.json.value;\n}\nif (!cfg.openai_model) throw new Error('hg_settings is empty: run supabase/schema.sql and scripts/setup.py supabase');\ncfg.today = new Date().toISOString().slice(0, 10);\nreturn [{ json: cfg }];\n"
+      },
+      "id": "f3c400ae-9a2e-5c6d-aa21-089a27609bda",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "name": "Claim Due Emails",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_claim_due_outreach",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_limit: 20 }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "1948b9f2-63b8-5883-b2b9-ef0112b78a47",
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "name": "Due Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Normalises one outreach row (from the claim RPC or from the active-threads query).\nreturn $input.all().filter(i => i.json && (i.json.outreach_id || i.json.id)).map((i, idx) => {\n  const j = i.json;\n  return {\n    json: Object.assign({}, j, {\n      outreach_id: j.outreach_id || j.id,\n      sent_message_ids: j.sent_message_ids || [],\n      has_thread: !!j.thread_id\n    }),\n    pairedItem: { item: idx }\n  };\n});\n"
+      },
+      "id": "d55fbe0c-8b0a-583b-878d-1ca7fcf3182e",
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "name": "Has Thread?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "4766ea66-39c7-42d1-9fe1-c7edc270fbfc",
+              "leftValue": "={{ $json.has_thread }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "fcb87dad-ff32-53de-a890-c63af4f3cc87",
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "name": "Gmail: Get Thread",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://gmail.googleapis.com/gmail/v1/users/me/threads/' + $json.thread_id + '?format=metadata&metadataHeaders=Message-ID&metadataHeaders=Subject' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "__CRED_GMAIL__",
+          "name": "HG- Gmail"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "6cc4ed84-bce2-5e4e-8108-eb220e671a26",
+      "position": [
+        1560,
+        -200
+      ]
+    },
+    {
+      "name": "Detect Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Looks at the Gmail thread: any message we did not send ourselves = the candidate replied.\nreturn $input.all().map((it, i) => {\n  const d = $('Due Item').itemMatching(i).json;\n  const t = it.json || {};\n  if (!d.has_thread) return { json: Object.assign({}, d, { replied: false }), pairedItem: { item: i } };\n  const sent = d.sent_message_ids || [];\n  const msgs = t.messages || [];\n  const hdr = (m, n) => ((((m || {}).payload || {}).headers || []).filter(h => h.name.toLowerCase() === n.toLowerCase())[0] || {}).value || '';\n  const reply = msgs.filter(m => sent.indexOf(m.id) === -1)[0];\n  const ours = msgs.filter(m => sent.indexOf(m.id) !== -1);\n  return {\n    json: Object.assign({}, d, {\n      replied: !!reply,\n      reply_message_id: reply ? reply.id : null,\n      last_rfc_message_id: hdr(ours[ours.length - 1], 'Message-ID'),\n      subject: hdr(msgs[0], 'Subject'),\n      thread_error: t.error ? String(t.error.message || JSON.stringify(t.error)).slice(0, 200) : null\n    }),\n    pairedItem: { item: i }\n  };\n});\n"
+      },
+      "id": "5427ad42-7ec4-56b8-8a8d-dce0db8ca1a4",
+      "position": [
+        1820,
+        0
+      ]
+    },
+    {
+      "name": "Replied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "df251330-fff5-4305-896d-4840c2ecea64",
+              "leftValue": "={{ $json.replied }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "57e60aef-3ca2-52c7-a1de-d831d6614d5f",
+      "position": [
+        2080,
+        0
+      ]
+    },
+    {
+      "name": "Mark Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_mark_reply",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_thread_id: $json.thread_id, p_message_id: $json.reply_message_id }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "6e79526c-a12e-51c3-ac1c-02cdd23ef29e",
+      "position": [
+        2340,
+        -400
+      ]
+    },
+    {
+      "name": "Reply Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// A reply stopped the sequence: prepare the GHL stage move + Slack notice.\nconst cfg = $('Config').first().json;\nconst out = [];\n$input.all().forEach((it, i) => {\n  const r = it.json || {};\n  if (!r.matched || r.already) return;\n  out.push({\n    json: {\n      opportunity_id: r.ghl_opportunity_id || null,\n      stage_id: (cfg.ghl_stage_ids || {}).replied || null,\n      slack: { channel: cfg.slack_channel_id, text: '📬 *' + r.candidate_name + '* replied about *' + r.role_title +\n        '*. Outreach stopped after ' + r.emails_sent + ' email(s). GHL stage → *Replied*. Time to book the screening call!' }\n    },\n    pairedItem: { item: i }\n  });\n});\nreturn out;\n"
+      },
+      "id": "85b7e205-d41a-52d6-b88a-3e521813064b",
+      "position": [
+        2600,
+        -400
+      ]
+    },
+    {
+      "name": "GHL: Stage Replied",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ 'https://services.leadconnectorhq.com/opportunities/' + $json.opportunity_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ pipelineId: $('Config').first().json.ghl_pipeline_id, pipelineStageId: $json.stage_id }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_GHL__",
+          "name": "HG- GHL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "ed84190c-f72f-5228-891e-5b545433da6b",
+      "position": [
+        2860,
+        -400
+      ]
+    },
+    {
+      "name": "Slack: Candidate Replied",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Reply Notice').item.json.slack) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "699c9573-a53a-516d-9522-11b87aa3f327",
+      "position": [
+        3120,
+        -400
+      ]
+    },
+    {
+      "name": "Build Email",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Writes email 1 / follow-up 2 / follow-up 3 as a raw Gmail message (follow-ups stay in the same thread).\nconst cfg = $('Config').first().json;\nconst sender = cfg.sender_name || 'HG Talent Team';\nconst out = [];\n$input.all().forEach((it, i) => {\n  const d = it.json;\n  if (d.thread_error || d.replied) return; // never send blind if we could not read the thread\n  const first = d.first_name || 'there';\n  const why = String(d.reason || '').split('\\n')[0];\n  const subject0 = d.role_title + ' role with a US client: quick question, ' + first;\n  let subject = subject0;\n  let text;\n  if (d.step === 0) {\n    text = 'Hi ' + first + ',\\n\\nI\\'m reaching out from ' + sender + '. We\\'re hiring a ' + d.role_title + ' for a US client' +\n      (d.hours ? ' (' + d.hours + ')' : '') + (d.rate ? ', ' + d.rate : '') + '.\\n\\n' +\n      (why ? 'Your background stood out: ' + why + '\\n\\n' : '') +\n      'Would you be open to a 15-minute call this week? Just reply to this email and I\\'ll send a few times.\\n\\nBest,\\n' + sender;\n  } else if (d.step === 1) {\n    subject = d.subject ? (/^re:/i.test(d.subject) ? d.subject : 'Re: ' + d.subject) : 'Re: ' + subject0;\n    text = 'Hi ' + first + ',\\n\\nJust bumping this up: are you interested in the ' + d.role_title + ' role? A quick yes or no is perfect.\\n\\nThanks,\\n' + sender;\n  } else {\n    subject = d.subject ? (/^re:/i.test(d.subject) ? d.subject : 'Re: ' + d.subject) : 'Re: ' + subject0;\n    text = 'Hi ' + first + ',\\n\\nLast note from me. I\\'ll close your file for the ' + d.role_title + ' role this week unless I hear back. ' +\n      'If the timing is just wrong, reply \"later\" and I\\'ll check in next quarter.\\n\\nAll the best,\\n' + sender;\n  }\n  if (cfg.test_mode !== false) text += '\\n\\n[TEST MODE: in production this goes to the candidate, ' + d.candidate_name + ']';\n  const headers = ['To: ' + d.to_email, 'Subject: =?UTF-8?B?' + Buffer.from(subject, 'utf8').toString('base64') + '?=',\n    'MIME-Version: 1.0', 'Content-Type: text/plain; charset=\"UTF-8\"', 'Content-Transfer-Encoding: base64'];\n  if (d.step > 0 && d.last_rfc_message_id) {\n    headers.push('In-Reply-To: ' + d.last_rfc_message_id, 'References: ' + d.last_rfc_message_id);\n  }\n  const mime = headers.join('\\r\\n') + '\\r\\n\\r\\n' + Buffer.from(text, 'utf8').toString('base64');\n  const raw = Buffer.from(mime, 'utf8').toString('base64').replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\n  out.push({\n    json: Object.assign({}, d, { gmail_body: d.step > 0 && d.thread_id ? { raw: raw, threadId: d.thread_id } : { raw: raw } }),\n    pairedItem: { item: i }\n  });\n});\nreturn out;\n"
+      },
+      "id": "1d973e5a-4dc7-5afc-9bc1-c7ec27e80376",
+      "position": [
+        2340,
+        200
+      ]
+    },
+    {
+      "name": "Gmail: Send",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.gmail_body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "__CRED_GMAIL__",
+          "name": "HG- Gmail"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "bba59913-4e40-5316-bee7-f5b26b0f1778",
+      "position": [
+        2600,
+        200
+      ]
+    },
+    {
+      "name": "After Send",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Pairs each Gmail send result with its outreach row for the DB update.\nreturn $input.all().map((it, i) => {\n  const d = $('Build Email').itemMatching(i).json;\n  const r = it.json || {};\n  return {\n    json: {\n      ok: !!r.id && !r.error,\n      error: r.error ? String(r.error.message || JSON.stringify(r.error)).slice(0, 300) : null,\n      outreach_id: d.outreach_id, step_before: d.step, ghl_opportunity_id: d.ghl_opportunity_id || null,\n      candidate_name: d.candidate_name, role_title: d.role_title,\n      rpc: { p_id: d.outreach_id, p_message_id: r.id || null, p_thread_id: r.threadId || null }\n    },\n    pairedItem: { item: i }\n  };\n});\n"
+      },
+      "id": "59cd39f7-c173-5e5f-8a99-810679aa4133",
+      "position": [
+        2860,
+        200
+      ]
+    },
+    {
+      "name": "Sent OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "29ec2936-f39e-41c9-a876-adf34f8b649f",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "908cfdff-9d5f-5618-b1ad-6db965fa121e",
+      "position": [
+        3120,
+        200
+      ]
+    },
+    {
+      "name": "Record Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_outreach_sent",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.rpc) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "5216fd44-f02b-544b-8277-6f29524e8b06",
+      "position": [
+        3380,
+        100.0
+      ]
+    },
+    {
+      "name": "First Email?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "9eaa6833-6904-4f16-bad1-8bc8a0e98ffc",
+              "leftValue": "={{ $json.step === 1 && !!$('After Send').item.json.ghl_opportunity_id }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "1340883a-7304-5953-8167-248b10f4bebc",
+      "position": [
+        3640,
+        100.0
+      ]
+    },
+    {
+      "name": "GHL: Stage Outreach Sent",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ 'https://services.leadconnectorhq.com/opportunities/' + $('After Send').item.json.ghl_opportunity_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ pipelineId: $('Config').first().json.ghl_pipeline_id, pipelineStageId: ($('Config').first().json.ghl_stage_ids || {}).outreach_sent }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_GHL__",
+          "name": "HG- GHL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "f1817873-c091-5d08-be82-223f5b08c757",
+      "position": [
+        3900,
+        100.0
+      ]
+    },
+    {
+      "name": "Slack: Send Failed",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ channel: $('Config').first().json.slack_channel_id, text: '⚠️ Could not send outreach email to ' + $json.candidate_name + ' (' + $json.role_title + '): ' + $json.error + '. Will retry in 10 minutes.' }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "9be8868a-dba0-56fd-89c1-d2db777af8ce",
+      "position": [
+        3380,
+        300.0
+      ]
+    }
+  ],
+  "connections": {
+    "Claim Due Emails": {
+      "main": [
+        [
+          {
+            "node": "Due Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Due Item": {
+      "main": [
+        [
+          {
+            "node": "Has Thread?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Thread?": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Get Thread",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Detect Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Get Thread": {
+      "main": [
+        [
+          {
+            "node": "Detect Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Reply": {
+      "main": [
+        [
+          {
+            "node": "Replied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replied?": {
+      "main": [
+        [
+          {
+            "node": "Mark Reply",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Build Email",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Reply": {
+      "main": [
+        [
+          {
+            "node": "Reply Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Notice": {
+      "main": [
+        [
+          {
+            "node": "GHL: Stage Replied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL: Stage Replied": {
+      "main": [
+        [
+          {
+            "node": "Slack: Candidate Replied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 5 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Run Now": {
+      "main": [
+        [
+          {
+            "node": "Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Settings": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Claim Due Emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build Email": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Send": {
+      "main": [
+        [
+          {
+            "node": "After Send",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "After Send": {
+      "main": [
+        [
+          {
+            "node": "Sent OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Sent OK?": {
+      "main": [
+        [
+          {
+            "node": "Record Sent",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Slack: Send Failed",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Record Sent": {
+      "main": [
+        [
+          {
+            "node": "First Email?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "First Email?": {
+      "main": [
+        [
+          {
+            "node": "GHL: Stage Outreach Sent",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

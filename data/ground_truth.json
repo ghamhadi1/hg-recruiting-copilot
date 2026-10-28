@@ -1,0 +1,1051 @@
+{
+  "omar_haddad": {
+    "name": "Omar Haddad",
+    "email": "omar.haddad@example.com",
+    "files": [
+      "Omar_Haddad_CV.pdf",
+      "omar haddad cv final.docx"
+    ],
+    "active_file": "Omar_Haddad_CV.pdf",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)",
+      "French (basic)"
+    ],
+    "skills": [
+      "GoHighLevel",
+      "Zapier",
+      "Make",
+      "Webhooks / REST APIs",
+      "Funnels",
+      "Looker Studio"
+    ],
+    "scanned": false,
+    "duplicate": true
+  },
+  "lina_khoury": {
+    "name": "Lina Khoury",
+    "email": "lina.khoury@example.net",
+    "files": [
+      "Lina_Khoury_CV.docx",
+      "Lina Khoury - Resume 2026.pdf"
+    ],
+    "active_file": "Lina Khoury - Resume 2026.pdf",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "GoHighLevel",
+      "n8n",
+      "Zapier",
+      "Make",
+      "Webhooks",
+      "OpenAI API"
+    ],
+    "scanned": false,
+    "old_file": "Lina_Khoury_CV.docx",
+    "updated": true
+  },
+  "karim_mansour": {
+    "name": "Karim Mansour",
+    "email": "karim.mansour@example.org",
+    "files": [
+      "karim mansour resume.pdf"
+    ],
+    "active_file": "karim mansour resume.pdf",
+    "languages": [
+      "Arabic (native)",
+      "English (good)"
+    ],
+    "skills": [
+      "GoHighLevel",
+      "Funnels",
+      "Zapier (basic)",
+      "Canva"
+    ],
+    "scanned": false
+  },
+  "sara_nasser": {
+    "name": "Sara Nasser",
+    "email": "sara.nasser@example.com",
+    "files": [
+      "Scan_0007.pdf"
+    ],
+    "active_file": "Scan_0007.pdf",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)",
+      "Turkish (intermediate)"
+    ],
+    "skills": [
+      "GoHighLevel",
+      "Make",
+      "Zapier",
+      "Webhooks",
+      "Notion"
+    ],
+    "scanned": true
+  },
+  "youssef_elamrani": {
+    "name": "Youssef El Amrani",
+    "email": "y.elamrani@example.net",
+    "files": [
+      "Youssef-ElAmrani-CV.docx"
+    ],
+    "active_file": "Youssef-ElAmrani-CV.docx",
+    "languages": [
+      "Arabic (native)",
+      "French (fluent)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "GoHighLevel",
+      "n8n",
+      "Zapier",
+      "JavaScript",
+      "Webhooks / APIs"
+    ],
+    "scanned": false
+  },
+  "daniel_brooks": {
+    "name": "Daniel Brooks",
+    "email": "dan.brooks@example.com",
+    "files": [
+      "DanielBrooks_Resume.pdf"
+    ],
+    "active_file": "DanielBrooks_Resume.pdf",
+    "languages": [
+      "English (native)"
+    ],
+    "skills": [
+      "GoHighLevel",
+      "Zapier",
+      "Snapshots",
+      "Sales funnels"
+    ],
+    "scanned": false
+  },
+  "maria_santos": {
+    "name": "Maria Santos",
+    "email": "maria.santos@example.org",
+    "files": [
+      "Maria Santos CV.docx"
+    ],
+    "active_file": "Maria Santos CV.docx",
+    "languages": [
+      "Filipino / Tagalog (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "GoHighLevel",
+      "Zapier",
+      "Canva",
+      "Google Workspace"
+    ],
+    "scanned": false
+  },
+  "ahmed_fathy": {
+    "name": "Ahmed Fathy",
+    "email": "ahmed.fathy@example.com",
+    "files": [
+      "Ahmed_Fathy_Portfolio_CV.pdf"
+    ],
+    "active_file": "Ahmed_Fathy_Portfolio_CV.pdf",
+    "languages": [
+      "Arabic (native)",
+      "English (intermediate)"
+    ],
+    "skills": [
+      "GoHighLevel (1 yr)",
+      "Photoshop",
+      "Illustrator",
+      "Canva"
+    ],
+    "scanned": false
+  },
+  "priya_raman": {
+    "name": "Priya Raman",
+    "email": "priya.raman@example.net",
+    "files": [
+      "Priya_Raman.docx"
+    ],
+    "active_file": "Priya_Raman.docx",
+    "languages": [
+      "Tamil (native)",
+      "Hindi (fluent)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "HubSpot",
+      "Zapier",
+      "Salesforce (basic)",
+      "Google Analytics"
+    ],
+    "scanned": false
+  },
+  "jake_miller": {
+    "name": "Jake Miller",
+    "email": "jake.miller@example.org",
+    "files": [
+      "jake_miller_cv_2026.pdf"
+    ],
+    "active_file": "jake_miller_cv_2026.pdf",
+    "languages": [
+      "English (native)"
+    ],
+    "skills": [
+      "ClickFunnels",
+      "ActiveCampaign",
+      "Zapier"
+    ],
+    "scanned": false
+  },
+  "nour_saleh": {
+    "name": "Nour Saleh",
+    "email": "nour.saleh@example.com",
+    "files": [
+      "NourSaleh_CV.docx"
+    ],
+    "active_file": "NourSaleh_CV.docx",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Make",
+      "Airtable",
+      "GoHighLevel (6 months)",
+      "Notion"
+    ],
+    "scanned": false
+  },
+  "rania_aziz": {
+    "name": "Rania Aziz",
+    "email": "rania.aziz@example.com",
+    "files": [
+      "Rania_Aziz_Resume.pdf",
+      "RaniaAziz-CV (1).pdf"
+    ],
+    "active_file": "Rania_Aziz_Resume.pdf",
+    "languages": [
+      "Arabic (native, Gulf dialect)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Calendar management",
+      "Google Workspace",
+      "Microsoft 365",
+      "Travel planning",
+      "Canva"
+    ],
+    "scanned": false,
+    "duplicate": true
+  },
+  "hiba_darwish": {
+    "name": "Hiba Darwish",
+    "email": "hiba.d@example.net",
+    "files": [
+      "Hiba Darwish - VA.pdf"
+    ],
+    "active_file": "Hiba Darwish - VA.pdf",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)",
+      "French (fluent)"
+    ],
+    "skills": [
+      "Canva",
+      "Meta Business Suite",
+      "Google Workspace"
+    ],
+    "scanned": false
+  },
+  "fatima_benali": {
+    "name": "Fatima Zahra Benali",
+    "email": "fz.benali@example.org",
+    "files": [
+      "CV_Fatima_Zahra_Benali.docx"
+    ],
+    "active_file": "CV_Fatima_Zahra_Benali.docx",
+    "languages": [
+      "Arabic (native)",
+      "French (fluent)",
+      "English (good)"
+    ],
+    "skills": [
+      "Notion",
+      "Gorgias",
+      "Google Workspace"
+    ],
+    "scanned": false
+  },
+  "grace_wanjiru": {
+    "name": "Grace Wanjiru",
+    "email": "grace.wanjiru@example.com",
+    "files": [
+      "Grace_Wanjiru_EA.pdf"
+    ],
+    "active_file": "Grace_Wanjiru_EA.pdf",
+    "languages": [
+      "English (fluent)",
+      "Swahili (native)"
+    ],
+    "skills": [
+      "Google Workspace",
+      "Calendly",
+      "Expensify",
+      "Asana"
+    ],
+    "scanned": false
+  },
+  "ana_lopez": {
+    "name": "Ana Lopez",
+    "email": "ana.lopez@example.net",
+    "files": [
+      "Ana Lopez Resume.docx"
+    ],
+    "active_file": "Ana Lopez Resume.docx",
+    "languages": [
+      "Spanish (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Follow Up Boss",
+      "Canva",
+      "Google Workspace"
+    ],
+    "scanned": false
+  },
+  "joy_mendoza": {
+    "name": "Joy Mendoza",
+    "email": "joy.mendoza@example.org",
+    "files": [
+      "JoyMendoza_TC.pdf"
+    ],
+    "active_file": "JoyMendoza_TC.pdf",
+    "languages": [
+      "Filipino / Tagalog (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "dotloop",
+      "SkySlope",
+      "Follow Up Boss",
+      "Google Workspace"
+    ],
+    "scanned": false
+  },
+  "mona_ibrahim": {
+    "name": "Mona Ibrahim",
+    "email": "mona.ibrahim@example.com",
+    "files": [
+      "mona_ibrahim.docx"
+    ],
+    "active_file": "mona_ibrahim.docx",
+    "languages": [
+      "Arabic (native)",
+      "English (good)"
+    ],
+    "skills": [
+      "Google Sheets",
+      "Gmail"
+    ],
+    "scanned": false
+  },
+  "layla_hassan": {
+    "name": "Layla Hassan",
+    "email": "layla.hassan@example.net",
+    "files": [
+      "Layla_Hassan_CV.pdf",
+      "Layla Hassan CV - updated Oct 2026.docx"
+    ],
+    "active_file": "Layla Hassan CV - updated Oct 2026.docx",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "dotloop",
+      "Follow Up Boss",
+      "Google Workspace",
+      "Calendar management",
+      "Transaction coordination"
+    ],
+    "scanned": false,
+    "old_file": "Layla_Hassan_CV.pdf",
+    "updated": true
+  },
+  "tariq_saeed": {
+    "name": "Tariq Saeed",
+    "email": "tariq.saeed@example.com",
+    "files": [
+      "Tariq Saeed CV.pdf"
+    ],
+    "active_file": "Tariq Saeed CV.pdf",
+    "languages": [
+      "Urdu (native)",
+      "English (fluent)",
+      "Arabic (basic reading)"
+    ],
+    "skills": [
+      "Kajabi",
+      "Calendly",
+      "Google Workspace"
+    ],
+    "scanned": false
+  },
+  "elif_yilmaz": {
+    "name": "Elif Yilmaz",
+    "email": "elif.yilmaz@example.org",
+    "files": [
+      "ElifYilmaz.docx"
+    ],
+    "active_file": "ElifYilmaz.docx",
+    "languages": [
+      "Turkish (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Shopify",
+      "Zendesk",
+      "Google Sheets"
+    ],
+    "scanned": false
+  },
+  "hannah_okoro": {
+    "name": "Hannah Okoro",
+    "email": "hannah.okoro@example.com",
+    "files": [
+      "Hannah_Okoro_CV.pdf"
+    ],
+    "active_file": "Hannah_Okoro_CV.pdf",
+    "languages": [
+      "English (fluent)",
+      "Yoruba (native)"
+    ],
+    "skills": [
+      "AppFolio",
+      "Google Workspace",
+      "Excel"
+    ],
+    "scanned": false
+  },
+  "mark_petrenko": {
+    "name": "Mark Petrenko",
+    "email": "mark.petrenko@example.net",
+    "files": [
+      "Mark_Petrenko_CV.pdf"
+    ],
+    "active_file": "Mark_Petrenko_CV.pdf",
+    "languages": [
+      "Ukrainian (native)",
+      "English (C1)",
+      "Russian (fluent)"
+    ],
+    "skills": [
+      "React",
+      "TypeScript",
+      "Node.js",
+      "PostgreSQL",
+      "Azure",
+      "Jest"
+    ],
+    "scanned": false
+  },
+  "bilal_qureshi": {
+    "name": "Bilal Qureshi",
+    "email": "bilal.qureshi@example.com",
+    "files": [
+      "Bilal Qureshi.docx",
+      "CV_BilalQureshi_FullStack.pdf"
+    ],
+    "active_file": "Bilal Qureshi.docx",
+    "languages": [
+      "Urdu (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "React",
+      "Node.js",
+      "TypeScript",
+      "AWS",
+      "PostgreSQL",
+      "Docker"
+    ],
+    "scanned": false,
+    "duplicate": true
+  },
+  "elena_popescu": {
+    "name": "Elena Popescu",
+    "email": "elena.popescu@example.org",
+    "files": [
+      "Elena_Popescu_Resume.docx"
+    ],
+    "active_file": "Elena_Popescu_Resume.docx",
+    "languages": [
+      "Romanian (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Vue.js",
+      "Node.js",
+      "JavaScript",
+      "MongoDB"
+    ],
+    "scanned": false
+  },
+  "tomas_herrera": {
+    "name": "Tomas Herrera",
+    "email": "tomas.herrera@example.com",
+    "files": [
+      "Tomas Herrera CV.pdf"
+    ],
+    "active_file": "Tomas Herrera CV.pdf",
+    "languages": [
+      "Spanish (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Python",
+      "Django",
+      "React",
+      "PostgreSQL"
+    ],
+    "scanned": false
+  },
+  "chidi_okafor": {
+    "name": "Chidi Okafor",
+    "email": "chidi.okafor@example.net",
+    "files": [
+      "Chidi_Okafor_Backend.docx"
+    ],
+    "active_file": "Chidi_Okafor_Backend.docx",
+    "languages": [
+      "English (fluent)",
+      "Igbo (native)"
+    ],
+    "skills": [
+      "Node.js",
+      "Go",
+      "React",
+      "PostgreSQL",
+      "Kafka"
+    ],
+    "scanned": false
+  },
+  "aisha_rahman": {
+    "name": "Aisha Rahman",
+    "email": "aisha.rahman@example.org",
+    "files": [
+      "AishaRahman_CV.pdf"
+    ],
+    "active_file": "AishaRahman_CV.pdf",
+    "languages": [
+      "Bengali (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Angular",
+      "C#",
+      ".NET",
+      "SQL Server"
+    ],
+    "scanned": false
+  },
+  "lucas_ferreira": {
+    "name": "Lucas Ferreira",
+    "email": "lucas.ferreira@example.com",
+    "files": [
+      "lucas-ferreira-cv.docx"
+    ],
+    "active_file": "lucas-ferreira-cv.docx",
+    "languages": [
+      "Portuguese (native)",
+      "English (good)"
+    ],
+    "skills": [
+      "React Native",
+      "React",
+      "Node.js",
+      "Firebase"
+    ],
+    "scanned": false
+  },
+  "hussein_ali": {
+    "name": "Hussein Ali",
+    "email": "hussein.ali@example.net",
+    "files": [
+      "Hussein_Ali_FullStack.pdf"
+    ],
+    "active_file": "Hussein_Ali_FullStack.pdf",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)",
+      "Kurdish (conversational)"
+    ],
+    "skills": [
+      "React",
+      "Node.js",
+      "TypeScript",
+      "NestJS",
+      "PostgreSQL",
+      "Stripe",
+      "DigitalOcean"
+    ],
+    "scanned": false
+  },
+  "kevin_tran": {
+    "name": "Kevin Tran",
+    "email": "kevin.tran@example.org",
+    "files": [
+      "KevinTran.pdf"
+    ],
+    "active_file": "KevinTran.pdf",
+    "languages": [
+      "Vietnamese (native)",
+      "English (good)"
+    ],
+    "skills": [
+      "React",
+      "JavaScript",
+      "Tailwind"
+    ],
+    "scanned": false
+  },
+  "sofia_rossi": {
+    "name": "Sofia Rossi",
+    "email": "sofia.rossi@example.com",
+    "files": [
+      "Sofia_Rossi_CV_EN.docx"
+    ],
+    "active_file": "Sofia_Rossi_CV_EN.docx",
+    "languages": [
+      "Italian (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Next.js",
+      "React",
+      "Node.js",
+      "PostgreSQL",
+      "GCP",
+      "TypeScript"
+    ],
+    "scanned": false
+  },
+  "arjun_mehta": {
+    "name": "Arjun Mehta",
+    "email": "arjun.mehta@example.net",
+    "files": [
+      "Arjun_Mehta.pdf"
+    ],
+    "active_file": "Arjun_Mehta.pdf",
+    "languages": [
+      "Hindi (native)",
+      "English (fluent)",
+      "Marathi (fluent)"
+    ],
+    "skills": [
+      "Java",
+      "Spring Boot",
+      "MySQL",
+      "React (basic)"
+    ],
+    "scanned": false
+  },
+  "joanne_cruz": {
+    "name": "Joanne Cruz",
+    "email": "joanne.cruz@example.com",
+    "files": [
+      "Joanne Cruz - Bookkeeper.pdf"
+    ],
+    "active_file": "Joanne Cruz - Bookkeeper.pdf",
+    "languages": [
+      "Filipino / Tagalog (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "QuickBooks Online",
+      "Gusto",
+      "Excel",
+      "Bill.com"
+    ],
+    "scanned": false
+  },
+  "nadia_farouk": {
+    "name": "Nadia Farouk",
+    "email": "nadia.farouk@example.net",
+    "files": [
+      "Nadia_Farouk_CV.docx"
+    ],
+    "active_file": "Nadia_Farouk_CV.docx",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Xero",
+      "QuickBooks Online",
+      "Excel",
+      "Dext"
+    ],
+    "scanned": false
+  },
+  "peter_mwangi": {
+    "name": "Peter Mwangi",
+    "email": "peter.mwangi@example.org",
+    "files": [
+      "PeterMwangi_Bookkeeping.pdf"
+    ],
+    "active_file": "PeterMwangi_Bookkeeping.pdf",
+    "languages": [
+      "English (fluent)",
+      "Swahili (native)"
+    ],
+    "skills": [
+      "QuickBooks Online",
+      "Xero",
+      "Excel"
+    ],
+    "scanned": false
+  },
+  "linh_nguyen": {
+    "name": "Linh Nguyen",
+    "email": "linh.nguyen@example.com",
+    "files": [
+      "Linh Nguyen CV.docx"
+    ],
+    "active_file": "Linh Nguyen CV.docx",
+    "languages": [
+      "Vietnamese (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "QuickBooks Online",
+      "Gusto",
+      "ADP",
+      "Avalara"
+    ],
+    "scanned": false
+  },
+  "rosa_delgado": {
+    "name": "Rosa Delgado",
+    "email": "rosa.delgado@example.net",
+    "files": [
+      "rosa_delgado_cv.pdf"
+    ],
+    "active_file": "rosa_delgado_cv.pdf",
+    "languages": [
+      "Spanish (native)",
+      "English (intermediate)"
+    ],
+    "skills": [
+      "QuickBooks Desktop",
+      "Excel"
+    ],
+    "scanned": false
+  },
+  "imran_sheikh": {
+    "name": "Imran Sheikh",
+    "email": "imran.sheikh@example.com",
+    "files": [
+      "Imran_Sheikh_ACCA.docx"
+    ],
+    "active_file": "Imran_Sheikh_ACCA.docx",
+    "languages": [
+      "Urdu (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "NetSuite",
+      "QuickBooks Online",
+      "ADP",
+      "Excel"
+    ],
+    "scanned": false
+  },
+  "claire_dubois": {
+    "name": "Claire Dubois",
+    "email": "claire.dubois@example.org",
+    "files": [
+      "Claire_Dubois_CV.pdf"
+    ],
+    "active_file": "Claire_Dubois_CV.pdf",
+    "languages": [
+      "French (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Sage 50",
+      "Excel"
+    ],
+    "scanned": false
+  },
+  "mariam_khalil": {
+    "name": "Mariam Khalil",
+    "email": "mariam.khalil@example.com",
+    "files": [
+      "MariamKhalil_Bookkeeper.docx"
+    ],
+    "active_file": "MariamKhalil_Bookkeeper.docx",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)",
+      "French (good)"
+    ],
+    "skills": [
+      "QuickBooks Online",
+      "Gusto",
+      "Excel"
+    ],
+    "scanned": false
+  },
+  "ben_adeyemi": {
+    "name": "Ben Adeyemi",
+    "email": "ben.adeyemi@example.net",
+    "files": [
+      "Ben Adeyemi.pdf"
+    ],
+    "active_file": "Ben Adeyemi.pdf",
+    "languages": [
+      "English (fluent)"
+    ],
+    "skills": [
+      "QuickBooks Online",
+      "Excel"
+    ],
+    "scanned": false
+  },
+  "valentina_ortiz": {
+    "name": "Valentina Ortiz",
+    "email": "valentina.ortiz@example.org",
+    "files": [
+      "Valentina_Ortiz.docx"
+    ],
+    "active_file": "Valentina_Ortiz.docx",
+    "languages": [
+      "Spanish (native)",
+      "English (good)"
+    ],
+    "skills": [
+      "Xero",
+      "QuickBooks Online"
+    ],
+    "scanned": false
+  },
+  "sunita_rao": {
+    "name": "Sunita Rao",
+    "email": "sunita.rao@example.com",
+    "files": [
+      "Sunita Rao Resume.pdf"
+    ],
+    "active_file": "Sunita Rao Resume.pdf",
+    "languages": [
+      "Hindi (fluent)",
+      "Kannada (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Tally",
+      "Zoho Books",
+      "Excel"
+    ],
+    "scanned": false
+  },
+  "carlos_mendez": {
+    "name": "Carlos Mendez",
+    "email": "carlos.mendez@example.com",
+    "files": [
+      "Carlos_Mendez_Setter.pdf"
+    ],
+    "active_file": "Carlos_Mendez_Setter.pdf",
+    "languages": [
+      "Spanish (native)",
+      "English (C1)"
+    ],
+    "skills": [
+      "Cold calling",
+      "HubSpot",
+      "Appointment setting",
+      "Objection handling"
+    ],
+    "scanned": false
+  },
+  "ashley_turner": {
+    "name": "Ashley Turner",
+    "email": "ashley.turner@example.net",
+    "files": [
+      "Ashley Turner SDR.docx"
+    ],
+    "active_file": "Ashley Turner SDR.docx",
+    "languages": [
+      "English (native)"
+    ],
+    "skills": [
+      "Salesforce",
+      "Outreach",
+      "Cold calling"
+    ],
+    "scanned": false
+  },
+  "mohammed_alsayed": {
+    "name": "Mohammed Al-Sayed",
+    "email": "m.alsayed@example.org",
+    "files": [
+      "Mohammed_AlSayed_CV.pdf"
+    ],
+    "active_file": "Mohammed_AlSayed_CV.pdf",
+    "languages": [
+      "Arabic (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "GoHighLevel",
+      "Cold calling",
+      "Appointment setting"
+    ],
+    "scanned": false
+  },
+  "paolo_reyes": {
+    "name": "Paolo Reyes",
+    "email": "paolo.reyes@example.com",
+    "files": [
+      "PaoloReyes.docx"
+    ],
+    "active_file": "PaoloReyes.docx",
+    "languages": [
+      "Filipino / Cebuano (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Cold calling",
+      "Five9",
+      "Salesforce"
+    ],
+    "scanned": false
+  },
+  "emma_johansson": {
+    "name": "Emma Johansson",
+    "email": "emma.johansson@example.net",
+    "files": [
+      "Emma_Johansson.pdf"
+    ],
+    "active_file": "Emma_Johansson.pdf",
+    "languages": [
+      "Swedish (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "HubSpot",
+      "LinkedIn Sales Navigator"
+    ],
+    "scanned": false
+  },
+  "diego_ramirez": {
+    "name": "Diego Ramirez",
+    "email": "diego.ramirez@example.org",
+    "files": [
+      "Diego Ramirez - Appointment Setter.docx"
+    ],
+    "active_file": "Diego Ramirez - Appointment Setter.docx",
+    "languages": [
+      "Spanish (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Cold calling",
+      "GoHighLevel",
+      "Appointment setting"
+    ],
+    "scanned": false
+  },
+  "kofi_mensah": {
+    "name": "Kofi Mensah",
+    "email": "kofi.mensah@example.com",
+    "files": [
+      "Kofi_Mensah_SDR.pdf"
+    ],
+    "active_file": "Kofi_Mensah_SDR.pdf",
+    "languages": [
+      "English (fluent)",
+      "Twi (native)"
+    ],
+    "skills": [
+      "Outreach.io",
+      "Cold calling",
+      "Salesforce"
+    ],
+    "scanned": false
+  },
+  "zainab_yusuf": {
+    "name": "Zainab Yusuf",
+    "email": "zainab.yusuf@example.net",
+    "files": [
+      "ZainabYusuf_CV.docx"
+    ],
+    "active_file": "ZainabYusuf_CV.docx",
+    "languages": [
+      "English (fluent)",
+      "Hausa (native)"
+    ],
+    "skills": [
+      "Cold calling",
+      "JobNimbus",
+      "Appointment setting"
+    ],
+    "scanned": false
+  },
+  "rafael_costa": {
+    "name": "Rafael Costa",
+    "email": "rafael.costa@example.org",
+    "files": [
+      "Rafael Costa CV.pdf"
+    ],
+    "active_file": "Rafael Costa CV.pdf",
+    "languages": [
+      "Portuguese (native)",
+      "English (fluent)",
+      "Spanish (intermediate)"
+    ],
+    "skills": [
+      "HubSpot",
+      "Cold calling"
+    ],
+    "scanned": false
+  },
+  "hana_suzuki": {
+    "name": "Hana Suzuki",
+    "email": "hana.suzuki@example.com",
+    "files": [
+      "Hana_Suzuki_Resume.docx"
+    ],
+    "active_file": "Hana_Suzuki_Resume.docx",
+    "languages": [
+      "Japanese (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Salesforce",
+      "Cold calling"
+    ],
+    "scanned": false
+  },
+  "lucia_fernandez": {
+    "name": "Lucia Fernandez",
+    "email": "lucia.fernandez@example.net",
+    "files": [
+      "Lucia_Fernandez_CV.pdf"
+    ],
+    "active_file": "Lucia_Fernandez_CV.pdf",
+    "languages": [
+      "Spanish (native)",
+      "English (fluent)"
+    ],
+    "skills": [
+      "Zendesk",
+      "Intercom"
+    ],
+    "scanned": false
+  }
+}

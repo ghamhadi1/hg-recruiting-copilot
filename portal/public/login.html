@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Log in · HG Recruiting Copilot</title>
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<main style="max-width:380px;padding-top:12vh">
+  <div class="card">
+    <h1>HG Recruiting Copilot</h1>
+    <p class="muted small">Recruiter portal. Ask your admin for the password.</p>
+    <form id="f">
+      <label for="pw">Password</label>
+      <input id="pw" type="password" autocomplete="current-password" required autofocus>
+      <p id="err" class="fail small"></p>
+      <button class="btn primary" style="width:100%;justify-content:center">Log in</button>
+    </form>
+  </div>
+</main>
+<script>
+document.getElementById('f').onsubmit = async e => {
+  e.preventDefault();
+  const err = document.getElementById('err');
+  err.textContent = '';
+  const r = await fetch('/api/login', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ password: document.getElementById('pw').value }) });
+  if (r.ok) {
+    const next = new URLSearchParams(location.search).get('next') || '/';
+    location.href = next.startsWith('/') && !next.startsWith('//') ? next : '/';
+  } else {
+    err.textContent = (await r.json().catch(() => ({}))).error || 'Login failed';
+  }
+};
+</script>
+</body>
+</html>

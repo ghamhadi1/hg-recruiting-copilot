@@ -1,0 +1,1218 @@
+{
+  "name": "HG- 05 Slack Buttons",
+  "nodes": [
+    {
+      "name": "Webhook",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "__WH__-slack-action",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "webhookId": "c5a65f24-98af-5d33-aa48-68cfe8fddcc5",
+      "id": "e7f2192f-d154-55c9-8648-b7d9768b8b41",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Load Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_settings?select=key,value",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "9a6edba3-9215-5196-9bf9-bef0928c2c78",
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the hg_settings rows (key/value) into one config object for this run.\nconst cfg = {};\nfor (const item of $input.all()) {\n  if (item.json && item.json.key) cfg[item.json.key] = item.json.value;\n}\nif (!cfg.openai_model) throw new Error('hg_settings is empty: run supabase/schema.sql and scripts/setup.py supabase');\ncfg.today = new Date().toISOString().slice(0, 10);\nreturn [{ json: cfg }];\n"
+      },
+      "id": "6ef5dcfb-a387-5786-9bdf-3784dcd81aa3",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "name": "Parse Action",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Every Slack button click / modal submit arrives here. Verify it, then work out what was clicked.\nconst cfg = $('Config').first().json;\nlet payload = {};\ntry {\n  payload = JSON.parse($('Webhook').first().json.body.payload);\n} catch (e) {\n  return [{ json: { action: 'invalid' } }];\n}\nif (!cfg.slack_verification_token || payload.token !== cfg.slack_verification_token) return [{ json: { action: 'invalid' } }];\n\nconst u = payload.user || {};\nconst out = {\n  user: u.username || u.name || 'someone',\n  user_id: u.id || null,\n  response_url: payload.response_url || null,\n  trigger_id: payload.trigger_id || null,\n  channel: payload.channel ? payload.channel.id : null,\n  message_blocks: payload.message ? (payload.message.blocks || []) : [],\n  role_id: null, shortlist_id: null\n};\nif (payload.type === 'block_actions') {\n  const a = (payload.actions || [])[0] || {};\n  out.action = a.action_id;\n  const value = a.value || (a.selected_option ? a.selected_option.value : '') || '';\n  if (out.action === 'cand_approve_role') {\n    const parts = value.split(':');\n    out.shortlist_id = Number(parts[0]);\n    out.role_id = Number(parts[1]);\n    out.action = 'cand_approve';\n  } else if (String(out.action).indexOf('cand_') === 0) {\n    out.shortlist_id = Number(value);\n  } else {\n    out.role_id = Number(value);\n  }\n} else if (payload.type === 'view_submission' && payload.view && payload.view.callback_id === 'jd_feedback') {\n  out.action = 'jd_feedback';\n  const meta = JSON.parse(payload.view.private_metadata || '{}');\n  out.role_id = meta.role_id;\n  const vals = (payload.view.state && payload.view.state.values) || {};\n  out.feedback = ((vals.feedback_block || {}).feedback || {}).value || '';\n} else {\n  out.action = 'ignored';\n}\nreturn [{ json: out }];\n"
+      },
+      "id": "2261b046-7bea-5120-bae7-b7b8d1a6cb7b",
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "name": "Acknowledge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "parameters": {
+        "respondWith": "noData",
+        "options": {}
+      },
+      "id": "e4920c8b-0a45-53cd-9fd2-e078ceb80dac",
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "name": "Route",
+      "type": "n8n-nodes-base.switch",
+      "typeVersion": 3,
+      "parameters": {
+        "rules": {
+          "values": [
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "f5b83674-0546-4132-a91f-656c77f2e243",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "jd_approve",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "jd_approve"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "ae31bfdd-8f2e-4db1-b598-efb0bf3d2905",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "jd_reject",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "jd_reject"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "b1d81173-b4ea-4edb-a4c4-ef379479a0e1",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "jd_changes",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "jd_changes"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "a391d0cb-c94c-4d13-b8cb-8585365d8bcd",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "jd_feedback",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "jd_feedback"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "1bdf7333-3b6a-4dc8-8e24-516a9d43c4c4",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "cand_approve",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "cand_approve"
+            },
+            {
+              "conditions": {
+                "options": {
+                  "caseSensitive": true,
+                  "leftValue": "",
+                  "typeValidation": "loose"
+                },
+                "conditions": [
+                  {
+                    "id": "bb69d73c-5f72-4a3b-96c5-b26b977b3b25",
+                    "leftValue": "={{ $json.action }}",
+                    "rightValue": "cand_reject",
+                    "operator": {
+                      "type": "string",
+                      "operation": "equals"
+                    }
+                  }
+                ],
+                "combinator": "and"
+              },
+              "renameOutput": true,
+              "outputKey": "cand_reject"
+            }
+          ]
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "8f76e4e9-2503-5246-beb1-a11be84da672",
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "name": "JD Decide",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_role_decide",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_role_id: $json.role_id, p_decision: $json.action === 'jd_approve' ? 'approve' : 'reject', p_user: $json.user }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "11c7ec4d-714b-5b81-97cf-c14d0d5c875c",
+      "position": [
+        1560,
+        -600
+      ]
+    },
+    {
+      "name": "JD Decision Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// After Approve/Reject on a JD: rewrite the Slack message (buttons replaced by the decision).\nconst a = $('Parse Action').first().json;\nconst r = $input.first().json;\nconst cfg = $('Config').first().json;\nconst role = r.role || {};\nlet line;\nif (!r.ok) {\n  line = 'ℹ️ Already decided: this JD is *' + role.status + '* (by ' + (role.decided_by || '?') + '). Nothing changed.';\n} else if (a.action === 'jd_approve') {\n  line = '✅ *Approved* by @' + a.user + '. The role is open, the JD was sent to the client, and the shortlist is being built…';\n} else {\n  line = '❌ *Rejected* by @' + a.user + '. Nothing was sent to the client.';\n}\nconst blocks = (a.message_blocks || []).filter(b => b.type !== 'actions');\nblocks.push({ type: 'section', text: { type: 'mrkdwn', text: line } });\n\nconst approved = !!(r.ok && a.action === 'jd_approve');\nconst jd = role.jd || {};\nconst to = cfg.test_mode === false ? role.client_email : cfg.test_recipient;\nlet raw = null;\nif (approved && to) {\n  const subject = 'Job description for your approval record: ' + role.title;\n  const text = 'Hi,\\n\\nThanks for the call. Here is the final job description we will use to find your ' + role.title + '.\\n\\n' +\n    role.jd_markdown + '\\n\\nWe will share a shortlist shortly.\\n\\nBest,\\n' + (cfg.sender_name || 'HG Talent Team') +\n    (cfg.test_mode === false ? '' : '\\n\\n[TEST MODE: the real client email would be ' + (role.client_email || 'not set') + ']');\n  const mime = ['To: ' + to, 'Subject: =?UTF-8?B?' + Buffer.from(subject, 'utf8').toString('base64') + '?=', 'MIME-Version: 1.0',\n    'Content-Type: text/plain; charset=\"UTF-8\"', 'Content-Transfer-Encoding: base64', '',\n    Buffer.from(text, 'utf8').toString('base64')].join('\\r\\n');\n  raw = Buffer.from(mime, 'utf8').toString('base64').replace(/\\+/g, '-').replace(/\\//g, '_').replace(/=+$/, '');\n}\nreturn [{ json: {\n  approved: approved, send_client_email: !!raw, gmail_body: raw ? { raw: raw } : null,\n  role_id: role.id, search_query: role.search_query, title: role.title,\n  update: { replace_original: true, text: line, blocks: blocks }\n} }];\n"
+      },
+      "id": "627f1799-05df-5887-8dc9-357b2c0e48b2",
+      "position": [
+        1820,
+        -600
+      ]
+    },
+    {
+      "name": "Update JD Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $('Parse Action').first().json.response_url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.update) }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "id": "c7276454-c0c9-54d9-8a34-f28a69fb8bc6",
+      "position": [
+        2080,
+        -600
+      ]
+    },
+    {
+      "name": "Approved?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "781a8b2e-bb81-4826-85d5-23372694f9aa",
+              "leftValue": "={{ $('JD Decision Message').first().json.approved }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "dc9c55eb-6f82-5213-8481-0393d9a9a90e",
+      "position": [
+        2340,
+        -600
+      ]
+    },
+    {
+      "name": "Email Client?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "c45e1cf2-1c23-4aaa-bbad-5d7d2c0a28a2",
+              "leftValue": "={{ $('JD Decision Message').first().json.send_client_email }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "279e83c1-b77e-5370-8219-d2a9951bae83",
+      "position": [
+        2600,
+        -600
+      ]
+    },
+    {
+      "name": "Email JD to Client",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://gmail.googleapis.com/gmail/v1/users/me/messages/send",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('JD Decision Message').first().json.gmail_body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "__CRED_GMAIL__",
+          "name": "HG- Gmail"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "d3c0371d-c05b-50ab-bffa-5b159b1294a6",
+      "position": [
+        2860,
+        -800
+      ]
+    },
+    {
+      "name": "Auto Shortlist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__N8N_BASE_URL__/webhook/__WH__-search",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ question: $('JD Decision Message').first().json.search_query, role_id: $('JD Decision Message').first().json.role_id, source: 'auto' }) }}",
+        "options": {
+          "timeout": 150000
+        }
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_WEBHOOK__",
+          "name": "HG- Webhook Secret"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "ef55f8e8-9594-5eb6-80b1-25f3ff0dec97",
+      "position": [
+        3120,
+        -600
+      ]
+    },
+    {
+      "name": "Shortlist Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Auto-shortlist after a JD is approved: post it to the channel with Approve buttons.\nconst cfg = $('Config').first().json;\nconst d = $('JD Decision Message').first().json;\nconst r = $input.first().json || {};\nlet body;\nif (r.error || !r.ok) {\n  body = { channel: cfg.slack_channel_id, text: '⚠️ Could not build the shortlist for ' + d.title + ': ' +\n    String((r.error && (r.error.message || r.error)) || 'unknown error').slice(0, 300) };\n} else {\n  body = { channel: cfg.slack_channel_id, text: '📋 Shortlist for ' + d.title + ': ' + r.text,\n    blocks: [{ type: 'header', text: { type: 'plain_text', text: ('📋 Shortlist: ' + d.title).slice(0, 150) } }].concat(r.blocks || []).slice(0, 50) };\n}\nreturn [{ json: { body: body } }];\n"
+      },
+      "id": "5188ed67-138c-5f79-bbce-5405777beba0",
+      "position": [
+        3380,
+        -600
+      ]
+    },
+    {
+      "name": "Post Shortlist",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "id": "948aa99a-9050-5695-b423-c0d177c18666",
+      "position": [
+        3640,
+        -600
+      ]
+    },
+    {
+      "name": "Feedback Form",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// \"Request changes\" opens a small form in Slack where the recruiter types what to fix.\nconst a = $input.first().json;\nreturn [{ json: { body: {\n  trigger_id: a.trigger_id,\n  view: {\n    type: 'modal', callback_id: 'jd_feedback',\n    private_metadata: JSON.stringify({ role_id: a.role_id }),\n    title: { type: 'plain_text', text: 'Request JD changes' },\n    submit: { type: 'plain_text', text: 'Rewrite JD' },\n    close: { type: 'plain_text', text: 'Cancel' },\n    blocks: [{\n      type: 'input', block_id: 'feedback_block',\n      label: { type: 'plain_text', text: 'What should change?' },\n      element: { type: 'plain_text_input', action_id: 'feedback', multiline: true,\n        placeholder: { type: 'plain_text', text: 'e.g. Make Arabic a must-have. Budget is $2,000-2,600.' } }\n    }]\n  }\n} } }];\n"
+      },
+      "id": "77753aa6-4c69-508b-b647-be55e8364590",
+      "position": [
+        1560,
+        -200
+      ]
+    },
+    {
+      "name": "Open Form",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/views.open",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "id": "e9f183ff-299b-5eed-8bf0-b1f379468759",
+      "position": [
+        1820,
+        -200
+      ]
+    },
+    {
+      "name": "Request Changes",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_role_decide",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_role_id: $json.role_id, p_decision: 'changes', p_user: $json.user, p_feedback: $json.feedback }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "59f447a0-fdd6-5f9d-afa5-7046448f52f3",
+      "position": [
+        1560,
+        0
+      ]
+    },
+    {
+      "name": "Changes Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// After the feedback form: mark the old Slack message as \"changes requested\" (the new version is posted separately).\nconst a = $('Parse Action').first().json;\nconst r = $input.first().json;\nconst role = r.role || {};\nconst text = '✏️ *' + (role.title || 'JD') + '* v' + role.version + ': changes requested by @' + a.user + ': \"' +\n  String(a.feedback || '').slice(0, 500) + '\". A rewritten version is posted below for approval.';\nreturn [{ json: { ok: !!r.ok, body: { channel: role.slack_channel, ts: role.slack_ts, text: text,\n  blocks: [{ type: 'section', text: { type: 'mrkdwn', text: text } }] } } }];\n"
+      },
+      "id": "efbd97c3-1269-520f-8242-4cb8552b7659",
+      "position": [
+        1820,
+        0
+      ]
+    },
+    {
+      "name": "Changes OK?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "039ecf4c-3661-4137-902d-bfba4912c602",
+              "leftValue": "={{ $json.ok }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "1bfa5479-1fb4-54e0-9559-eadcca5df166",
+      "position": [
+        2080,
+        0
+      ]
+    },
+    {
+      "name": "Mark Old Message",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.update",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "c8ddde79-1da3-55cf-86aa-541df7a2b14a",
+      "position": [
+        2340,
+        0
+      ]
+    },
+    {
+      "name": "Rewrite JD",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__N8N_BASE_URL__/webhook/__WH__-transcript",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ role_id: $('Parse Action').first().json.role_id, feedback: $('Parse Action').first().json.feedback, requested_by: $('Parse Action').first().json.user }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_WEBHOOK__",
+          "name": "HG- Webhook Secret"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "5ddf08fd-26fc-5db8-a99c-11d424676b73",
+      "position": [
+        2600,
+        0
+      ]
+    },
+    {
+      "name": "Candidate Decide",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_candidate_decide",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_shortlist_id: $json.shortlist_id, p_decision: $json.action === 'cand_reject' ? 'reject' : 'approve', p_user: $json.user, p_role_id: $json.role_id || null }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "9b4897f5-d339-5f66-980a-5dea85c31143",
+      "position": [
+        1560,
+        400
+      ]
+    },
+    {
+      "name": "Candidate Flags",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Decides whether this click should create GHL records + start outreach (first approval only).\nconst d = $input.first().json;\nreturn [{ json: Object.assign({}, d, { start: !!(d.ok && !d.already && d.decision === 'approve') }) }];\n"
+      },
+      "id": "4f708894-1edb-50cf-8810-481e84264768",
+      "position": [
+        1820,
+        400
+      ]
+    },
+    {
+      "name": "First Approval?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "52b6c195-4a29-42d5-9f15-6dfafb9a8e58",
+              "leftValue": "={{ $json.start }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "f7e3a8e4-326f-5cc3-8f32-e9b2d0c93b0e",
+      "position": [
+        2080,
+        400
+      ]
+    },
+    {
+      "name": "GHL Contact",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/contacts/upsert",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ locationId: $('Config').first().json.ghl_location_id, firstName: 'HG- ' + $json.candidate.full_name.split(' ')[0], lastName: $json.candidate.full_name.split(' ').slice(1).join(' '), email: $json.candidate.email || ('hg-candidate-' + $json.candidate.id + '@example.com'), tags: ['HG-candidate', 'HG-role-' + $json.role.id], source: 'HG Recruiting Copilot' }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_GHL__",
+          "name": "HG- GHL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "7eda3b2f-aa7e-583a-8ec5-4d83743bb6a2",
+      "position": [
+        2340,
+        300.0
+      ]
+    },
+    {
+      "name": "GHL Opportunity",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://services.leadconnectorhq.com/opportunities/",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ pipelineId: $('Config').first().json.ghl_pipeline_id, locationId: $('Config').first().json.ghl_location_id, name: 'HG- ' + $('Candidate Decide').first().json.candidate.full_name + ' - ' + $('Candidate Decide').first().json.role.title, pipelineStageId: ($('Config').first().json.ghl_stage_ids || {}).approved, status: 'open', contactId: ($json.contact || {}).id }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_GHL__",
+          "name": "HG- GHL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "bae05e37-ed46-5547-8f0e-492e5020062a",
+      "position": [
+        2600,
+        300.0
+      ]
+    },
+    {
+      "name": "Start Outreach",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_start_outreach",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_shortlist_id: $('Candidate Decide').first().json.shortlist_id, p_contact_id: ($('GHL Contact').first().json.contact || {}).id || null, p_opportunity_id: ($json.opportunity || {}).id || null }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "4b3c0ac3-954a-5b14-8cef-756d5dbd2b33",
+      "position": [
+        2860,
+        300.0
+      ]
+    },
+    {
+      "name": "Kick Sequencer",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__N8N_BASE_URL__/webhook/__WH__-outreach-run",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ reason: 'candidate approved' }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_WEBHOOK__",
+          "name": "HG- Webhook Secret"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "afe9744d-8605-5b80-aa58-7a2e8145d4f3",
+      "position": [
+        3120,
+        300.0
+      ]
+    },
+    {
+      "name": "Candidate Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Reply in Slack after Approve / Not a fit on a candidate.\nconst a = $('Parse Action').first().json;\nconst d = $('Candidate Decide').first().json;\nconst safe = name => { try { return $(name).first().json; } catch (e) { return null; } };\nconst contact = safe('GHL Contact');\nconst opp = safe('GHL Opportunity');\nconst started = safe('Start Outreach');\n\nconst name = d.candidate ? d.candidate.full_name : 'Candidate';\nlet text;\nlet ephemeral = false;\nif (!d.ok) {\n  text = '⚠️ ' + d.error;\n  ephemeral = true;\n} else if (d.decision === 'reject') {\n  text = '❌ *' + name + '* marked as not a fit by @' + a.user + '. No email will be sent.';\n} else if (d.already) {\n  text = 'ℹ️ *' + name + '* is already approved for this role, so no second email will be sent.';\n  ephemeral = true;\n} else if (started && started.ok) {\n  const warn = [];\n  if (!contact || contact.error || !contact.contact) warn.push('GHL contact failed: ' + JSON.stringify((contact && contact.error) || contact).slice(0, 150));\n  if (!opp || opp.error || !opp.opportunity) warn.push('GHL opportunity failed: ' + JSON.stringify((opp && opp.error) || opp).slice(0, 150));\n  text = '✅ *' + name + '* approved for *' + d.role.title + '* by @' + a.user + '.\\n' +\n    '• GHL: added to pipeline *HG- Candidates* → stage *Approved*\\n' +\n    '• Outreach: email 1 goes out within a few minutes to `' + started.outreach.to_email + '`. Follow-ups stop automatically when they reply.\\n' +\n    '📄 Based on CV: `' + d.cv_file_name + '`' + (warn.length ? '\\n⚠️ ' + warn.join('\\n⚠️ ') : '');\n} else {\n  text = '⚠️ ' + name + ' was approved, but outreach could not start: ' + ((started && started.error) || 'unknown error');\n}\nreturn [{ json: { url: a.response_url, body: { response_type: ephemeral ? 'ephemeral' : 'in_channel', replace_original: false, text: text } } }];\n"
+      },
+      "id": "cfabacf3-03f3-55ae-8421-bf29960d816b",
+      "position": [
+        3380,
+        400
+      ]
+    },
+    {
+      "name": "Reply in Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $json.url }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "onError": "continueRegularOutput",
+      "id": "ebacbf71-ac91-51ed-a3b0-118de886e7fc",
+      "position": [
+        3640,
+        400
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook": {
+      "main": [
+        [
+          {
+            "node": "Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Settings": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Parse Action",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse Action": {
+      "main": [
+        [
+          {
+            "node": "Acknowledge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Acknowledge": {
+      "main": [
+        [
+          {
+            "node": "Route",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Route": {
+      "main": [
+        [
+          {
+            "node": "JD Decide",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "JD Decide",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Feedback Form",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Request Changes",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Candidate Decide",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Candidate Decide",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JD Decide": {
+      "main": [
+        [
+          {
+            "node": "JD Decision Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "JD Decision Message": {
+      "main": [
+        [
+          {
+            "node": "Update JD Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Update JD Message": {
+      "main": [
+        [
+          {
+            "node": "Approved?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Approved?": {
+      "main": [
+        [
+          {
+            "node": "Email Client?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email Client?": {
+      "main": [
+        [
+          {
+            "node": "Email JD to Client",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Auto Shortlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Email JD to Client": {
+      "main": [
+        [
+          {
+            "node": "Auto Shortlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Auto Shortlist": {
+      "main": [
+        [
+          {
+            "node": "Shortlist Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Shortlist Message": {
+      "main": [
+        [
+          {
+            "node": "Post Shortlist",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Feedback Form": {
+      "main": [
+        [
+          {
+            "node": "Open Form",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Request Changes": {
+      "main": [
+        [
+          {
+            "node": "Changes Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Changes Message": {
+      "main": [
+        [
+          {
+            "node": "Changes OK?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Changes OK?": {
+      "main": [
+        [
+          {
+            "node": "Mark Old Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Old Message": {
+      "main": [
+        [
+          {
+            "node": "Rewrite JD",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Candidate Decide": {
+      "main": [
+        [
+          {
+            "node": "Candidate Flags",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Candidate Flags": {
+      "main": [
+        [
+          {
+            "node": "First Approval?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "First Approval?": {
+      "main": [
+        [
+          {
+            "node": "GHL Contact",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Candidate Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL Contact": {
+      "main": [
+        [
+          {
+            "node": "GHL Opportunity",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL Opportunity": {
+      "main": [
+        [
+          {
+            "node": "Start Outreach",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Start Outreach": {
+      "main": [
+        [
+          {
+            "node": "Kick Sequencer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Kick Sequencer": {
+      "main": [
+        [
+          {
+            "node": "Candidate Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Candidate Message": {
+      "main": [
+        [
+          {
+            "node": "Reply in Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

@@ -1,0 +1,453 @@
+{
+  "name": "HG- 07 Reply Watcher",
+  "nodes": [
+    {
+      "name": "Every 2 Minutes",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 2
+            }
+          ]
+        }
+      },
+      "id": "d67d139a-0aac-586b-94b2-9e874984d4c8",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Load Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_settings?select=key,value",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "9df299d5-bf4b-59b0-80cd-088da4c0a3db",
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the hg_settings rows (key/value) into one config object for this run.\nconst cfg = {};\nfor (const item of $input.all()) {\n  if (item.json && item.json.key) cfg[item.json.key] = item.json.value;\n}\nif (!cfg.openai_model) throw new Error('hg_settings is empty: run supabase/schema.sql and scripts/setup.py supabase');\ncfg.today = new Date().toISOString().slice(0, 10);\nreturn [{ json: cfg }];\n"
+      },
+      "id": "d65f53b4-7b19-56b4-a7d5-4d8963a53648",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "name": "Active Threads",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_outreach?select=id,thread_id,sent_message_ids&status=eq.active&thread_id=not.is.null",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "aacab584-d2d6-5471-847b-9d29d0ef2f49",
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "name": "Due Item",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Normalises one outreach row (from the claim RPC or from the active-threads query).\nreturn $input.all().filter(i => i.json && (i.json.outreach_id || i.json.id)).map((i, idx) => {\n  const j = i.json;\n  return {\n    json: Object.assign({}, j, {\n      outreach_id: j.outreach_id || j.id,\n      sent_message_ids: j.sent_message_ids || [],\n      has_thread: !!j.thread_id\n    }),\n    pairedItem: { item: idx }\n  };\n});\n"
+      },
+      "id": "49d94e0c-2062-561d-af56-83263b23562a",
+      "position": [
+        1040,
+        0
+      ]
+    },
+    {
+      "name": "Has Thread?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "4fb5eef8-3dde-43ce-a2e2-eeca770c5434",
+              "leftValue": "={{ $json.has_thread }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "d289dc73-eae9-5daa-a275-246141363d7b",
+      "position": [
+        1300,
+        0
+      ]
+    },
+    {
+      "name": "Gmail: Get Thread",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "={{ 'https://gmail.googleapis.com/gmail/v1/users/me/threads/' + $json.thread_id + '?format=metadata&metadataHeaders=Message-ID&metadataHeaders=Subject' }}",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "gmailOAuth2",
+        "options": {}
+      },
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "__CRED_GMAIL__",
+          "name": "HG- Gmail"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "496bd1e9-4d1f-5629-821c-83900eb070f5",
+      "position": [
+        1560,
+        -200
+      ]
+    },
+    {
+      "name": "Detect Reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Looks at the Gmail thread: any message we did not send ourselves = the candidate replied.\nreturn $input.all().map((it, i) => {\n  const d = $('Due Item').itemMatching(i).json;\n  const t = it.json || {};\n  if (!d.has_thread) return { json: Object.assign({}, d, { replied: false }), pairedItem: { item: i } };\n  const sent = d.sent_message_ids || [];\n  const msgs = t.messages || [];\n  const hdr = (m, n) => ((((m || {}).payload || {}).headers || []).filter(h => h.name.toLowerCase() === n.toLowerCase())[0] || {}).value || '';\n  const reply = msgs.filter(m => sent.indexOf(m.id) === -1)[0];\n  const ours = msgs.filter(m => sent.indexOf(m.id) !== -1);\n  return {\n    json: Object.assign({}, d, {\n      replied: !!reply,\n      reply_message_id: reply ? reply.id : null,\n      last_rfc_message_id: hdr(ours[ours.length - 1], 'Message-ID'),\n      subject: hdr(msgs[0], 'Subject'),\n      thread_error: t.error ? String(t.error.message || JSON.stringify(t.error)).slice(0, 200) : null\n    }),\n    pairedItem: { item: i }\n  };\n});\n"
+      },
+      "id": "5a9069a7-2c87-5359-bac1-0547ce4cb617",
+      "position": [
+        1820,
+        0
+      ]
+    },
+    {
+      "name": "Replied?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose"
+          },
+          "conditions": [
+            {
+              "id": "92d6a02f-229e-4406-bee5-0e538dd3fb01",
+              "leftValue": "={{ $json.replied }}",
+              "rightValue": "",
+              "operator": {
+                "type": "boolean",
+                "operation": "true",
+                "singleValue": true
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "looseTypeValidation": true,
+        "options": {}
+      },
+      "id": "e61bb849-c4b8-5e8c-bf54-827fe8708614",
+      "position": [
+        2080,
+        0
+      ]
+    },
+    {
+      "name": "Mark Reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "__SUPABASE_URL__/rest/v1/rpc/hg_mark_reply",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ p_thread_id: $json.thread_id, p_message_id: $json.reply_message_id }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "72f1d262-9e54-548c-a064-86380d19a9cf",
+      "position": [
+        2340,
+        0
+      ]
+    },
+    {
+      "name": "Reply Notice",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// A reply stopped the sequence: prepare the GHL stage move + Slack notice.\nconst cfg = $('Config').first().json;\nconst out = [];\n$input.all().forEach((it, i) => {\n  const r = it.json || {};\n  if (!r.matched || r.already) return;\n  out.push({\n    json: {\n      opportunity_id: r.ghl_opportunity_id || null,\n      stage_id: (cfg.ghl_stage_ids || {}).replied || null,\n      slack: { channel: cfg.slack_channel_id, text: '📬 *' + r.candidate_name + '* replied about *' + r.role_title +\n        '*. Outreach stopped after ' + r.emails_sent + ' email(s). GHL stage → *Replied*. Time to book the screening call!' }\n    },\n    pairedItem: { item: i }\n  });\n});\nreturn out;\n"
+      },
+      "id": "52716e51-8e4f-5bfa-9b37-446d8dac4653",
+      "position": [
+        2600,
+        0
+      ]
+    },
+    {
+      "name": "GHL: Stage Replied",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "PUT",
+        "url": "={{ 'https://services.leadconnectorhq.com/opportunities/' + $json.opportunity_id }}",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "Version",
+              "value": "2021-07-28"
+            },
+            {
+              "name": "Accept",
+              "value": "application/json"
+            }
+          ]
+        },
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ pipelineId: $('Config').first().json.ghl_pipeline_id, pipelineStageId: $json.stage_id }) }}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "__CRED_GHL__",
+          "name": "HG- GHL"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "6422bbd5-dfc1-5f73-ac9e-e6bfd52df8ac",
+      "position": [
+        2860,
+        0
+      ]
+    },
+    {
+      "name": "Slack: Candidate Replied",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($('Reply Notice').item.json.slack) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "onError": "continueRegularOutput",
+      "id": "1f386a29-7a15-5210-a005-4af8e700f788",
+      "position": [
+        3120,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Active Threads": {
+      "main": [
+        [
+          {
+            "node": "Due Item",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Due Item": {
+      "main": [
+        [
+          {
+            "node": "Has Thread?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Has Thread?": {
+      "main": [
+        [
+          {
+            "node": "Gmail: Get Thread",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Detect Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gmail: Get Thread": {
+      "main": [
+        [
+          {
+            "node": "Detect Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Detect Reply": {
+      "main": [
+        [
+          {
+            "node": "Replied?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Replied?": {
+      "main": [
+        [
+          {
+            "node": "Mark Reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Mark Reply": {
+      "main": [
+        [
+          {
+            "node": "Reply Notice",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Reply Notice": {
+      "main": [
+        [
+          {
+            "node": "GHL: Stage Replied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GHL: Stage Replied": {
+      "main": [
+        [
+          {
+            "node": "Slack: Candidate Replied",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Every 2 Minutes": {
+      "main": [
+        [
+          {
+            "node": "Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Settings": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Active Threads",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}

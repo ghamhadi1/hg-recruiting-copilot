@@ -1,0 +1,102 @@
+[
+  {
+    "id": 1,
+    "question": "Who has 3+ years of GHL and speaks Arabic?",
+    "expected_answer": "Omar Haddad (5 yrs), Sara Nasser (4 yrs, scanned CV), Lina Khoury (since 2023), Youssef El Amrani (3 yrs). NOT Karim Mansour (2.5 yrs), Ahmed Fathy (1 yr), Daniel Brooks (no Arabic). Omar appears once even though he sent 2 CVs.",
+    "must_include": ["omar.haddad@example.com", "sara.nasser@example.com", "lina.khoury@example.net", "y.elamrani@example.net"],
+    "must_not_include": ["karim.mansour@example.org", "ahmed.fathy@example.com", "dan.brooks@example.com"],
+    "required_cv": {"lina.khoury@example.net": "Lina Khoury - Resume 2026.pdf"},
+    "expect_no_match": false,
+    "tests": "years threshold, language filter, scanned CV, duplicate person"
+  },
+  {
+    "id": 2,
+    "question": "Who knows n8n and speaks Arabic?",
+    "expected_answer": "Lina Khoury (only her UPDATED 2026 CV mentions n8n) and Youssef El Amrani. Lina's reason must cite 'Lina Khoury - Resume 2026.pdf', never the old CV.",
+    "must_include": ["lina.khoury@example.net", "y.elamrani@example.net"],
+    "must_not_include": ["omar.haddad@example.com", "karim.mansour@example.org"],
+    "required_cv": {"lina.khoury@example.net": "Lina Khoury - Resume 2026.pdf"},
+    "expect_no_match": false,
+    "tests": "updated CV replaces old one"
+  },
+  {
+    "id": 3,
+    "question": "Find me a React and Node developer with 5+ years who speaks Arabic",
+    "expected_answer": "Hussein Ali only (6 yrs React + Node, Arabic native). Strong devs without Arabic (Bilal, Mark, Sofia) must not be recommended.",
+    "must_include": ["hussein.ali@example.net"],
+    "must_not_include": ["bilal.qureshi@example.com", "mark.petrenko@example.net", "sofia.rossi@example.com", "kevin.tran@example.org"],
+    "required_cv": {},
+    "expect_no_match": false,
+    "tests": "hard language requirement beats strong skills"
+  },
+  {
+    "id": 4,
+    "question": "Bookkeeper with QuickBooks Online and Gusto payroll experience for US clients",
+    "expected_answer": "Joanne Cruz, Linh Nguyen, Mariam Khalil. Not Claire Dubois (Sage only) or Rosa Delgado (QuickBooks Desktop).",
+    "must_include": ["joanne.cruz@example.com", "linh.nguyen@example.com", "mariam.khalil@example.com"],
+    "must_not_include": ["claire.dubois@example.org", "rosa.delgado@example.net"],
+    "required_cv": {},
+    "expect_no_match": false,
+    "tests": "multi-skill match, similar-but-wrong tools"
+  },
+  {
+    "id": 5,
+    "question": "Who speaks Spanish and has appointment setting experience in solar?",
+    "expected_answer": "Carlos Mendez and Diego Ramirez. Not Lucia Fernandez (chat support, no phone sales).",
+    "must_include": ["carlos.mendez@example.com", "diego.ramirez@example.org"],
+    "must_not_include": ["lucia.fernandez@example.net"],
+    "required_cv": {},
+    "expect_no_match": false,
+    "tests": "industry + language"
+  },
+  {
+    "id": 6,
+    "question": "Who has Xero experience and speaks Arabic?",
+    "expected_answer": "Nadia Farouk. Peter Mwangi and Valentina Ortiz know Xero but don't speak Arabic.",
+    "must_include": ["nadia.farouk@example.net"],
+    "must_not_include": ["peter.mwangi@example.org", "valentina.ortiz@example.org"],
+    "required_cv": {},
+    "expect_no_match": false,
+    "tests": "language filter on bookkeeping pool"
+  },
+  {
+    "id": 7,
+    "question": "Arabic-speaking virtual assistant with real estate transaction coordination experience",
+    "expected_answer": "Layla Hassan, based on her UPDATED Oct 2026 CV (her old CV had no real estate). Joy Mendoza is a TC but doesn't speak Arabic.",
+    "must_include": ["layla.hassan@example.net"],
+    "must_not_include": ["joy.mendoza@example.org"],
+    "required_cv": {"layla.hassan@example.net": "Layla Hassan CV - updated Oct 2026.docx"},
+    "expect_no_match": false,
+    "tests": "updated CV replaces old one"
+  },
+  {
+    "id": 8,
+    "question": "Who has 10+ years of Salesforce and speaks Japanese?",
+    "expected_answer": "NO GOOD MATCH. Closest is Hana Suzuki (Japanese, but only 2 years of Salesforce). The bot must say so and not invent anyone.",
+    "must_include": [],
+    "must_not_include": ["hana.suzuki@example.com"],
+    "required_cv": {},
+    "expect_no_match": true,
+    "tests": "no good match, no invented candidates"
+  },
+  {
+    "id": 9,
+    "question": "Executive assistant in Dubai who manages calendars and speaks Arabic",
+    "expected_answer": "Rania Aziz (her CV was uploaded twice as identical files; she must appear once).",
+    "must_include": ["rania.aziz@example.com"],
+    "must_not_include": [],
+    "required_cv": {},
+    "expect_no_match": false,
+    "tests": "duplicate file"
+  },
+  {
+    "id": 10,
+    "question": "Full-stack developer with AWS and 5+ years of React",
+    "expected_answer": "Bilal Qureshi (6 yrs React, AWS Lambda/RDS; sent 2 CVs with different email casing/phone format, must appear once). Not Kevin Tran (1 yr).",
+    "must_include": ["bilal.qureshi@example.com"],
+    "must_not_include": ["kevin.tran@example.org"],
+    "required_cv": {},
+    "expect_no_match": false,
+    "tests": "duplicate person with formatting differences"
+  }
+]

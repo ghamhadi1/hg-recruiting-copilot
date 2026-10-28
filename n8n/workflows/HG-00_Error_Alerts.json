@@ -1,0 +1,141 @@
+{
+  "name": "HG- 00 Error Alerts",
+  "nodes": [
+    {
+      "name": "Error Trigger",
+      "type": "n8n-nodes-base.errorTrigger",
+      "typeVersion": 1,
+      "parameters": {},
+      "id": "95aeb484-a5bd-5f13-8413-0ca71f5bf5bd",
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "name": "Load Settings",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "GET",
+        "url": "__SUPABASE_URL__/rest/v1/hg_settings?select=key,value",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "supabaseApi",
+        "options": {}
+      },
+      "credentials": {
+        "supabaseApi": {
+          "id": "__CRED_SUPABASE__",
+          "name": "HG- Supabase"
+        }
+      },
+      "id": "d18fac73-1788-5169-bfa9-1b25f0cb0bb8",
+      "position": [
+        260,
+        0
+      ]
+    },
+    {
+      "name": "Config",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Turns the hg_settings rows (key/value) into one config object for this run.\nconst cfg = {};\nfor (const item of $input.all()) {\n  if (item.json && item.json.key) cfg[item.json.key] = item.json.value;\n}\nif (!cfg.openai_model) throw new Error('hg_settings is empty: run supabase/schema.sql and scripts/setup.py supabase');\ncfg.today = new Date().toISOString().slice(0, 10);\nreturn [{ json: cfg }];\n"
+      },
+      "id": "8b9c5065-9eb2-56ba-bb53-d1d46ab89040",
+      "position": [
+        520,
+        0
+      ]
+    },
+    {
+      "name": "Error Message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "parameters": {
+        "jsCode": "// Any HG- workflow failure is posted to Slack, so nothing fails silently.\nconst cfg = $('Config').first().json;\nconst e = $('Error Trigger').first().json || {};\nconst ex = e.execution || {};\nconst wf = e.workflow || {};\nconst msg = (ex.error && (ex.error.message || ex.error.description)) || 'unknown error';\nreturn [{ json: { body: { channel: cfg.slack_channel_id, text: '🚨 n8n workflow *' + (wf.name || '?') + '* failed at *' +\n  (ex.lastNodeExecuted || '?') + '*: ' + String(msg).slice(0, 500) + (ex.url ? '\\n<' + ex.url + '|Open the execution>' : '') } } }];\n"
+      },
+      "id": "58acd999-aea5-5277-b2b9-8212f55f2e22",
+      "position": [
+        780,
+        0
+      ]
+    },
+    {
+      "name": "Post to Slack",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "parameters": {
+        "method": "POST",
+        "url": "https://slack.com/api/chat.postMessage",
+        "authentication": "predefinedCredentialType",
+        "nodeCredentialType": "slackApi",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "credentials": {
+        "slackApi": {
+          "id": "__CRED_SLACK__",
+          "name": "HG- Slack Bot"
+        }
+      },
+      "id": "952ff4a5-23d7-535b-9ace-341b33ceb9f0",
+      "position": [
+        1040,
+        0
+      ]
+    }
+  ],
+  "connections": {
+    "Error Trigger": {
+      "main": [
+        [
+          {
+            "node": "Load Settings",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Load Settings": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Error Message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Error Message": {
+      "main": [
+        [
+          {
+            "node": "Post to Slack",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "pinData": {}
+}
